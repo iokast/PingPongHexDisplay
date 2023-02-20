@@ -10,6 +10,7 @@ import tty
 import termios
 import cv2
 import random
+import fireflies
 
 import _rpi_ws281x as ws
 
@@ -45,6 +46,15 @@ resp = ws.ws2811_init(leds)
 if resp != ws.WS2811_SUCCESS:
     message = ws.ws2811_get_return_t_str(resp)
     raise RuntimeError('ws2811_init failed with code {0} ({1})'.format(resp, message))
+
+def set_pixel_color(pixel_id, color32):
+    ws.ws2811_led_set(channel, pixel_id, color32)
+
+def refresh_display(self):
+        resp = ws.ws2811_render(leds)
+        if resp != ws.WS2811_SUCCESS:
+            message = ws.ws2811_get_return_t_str(resp)
+            raise RuntimeError('ws2811_render failed with code {0} ({1})'.format(resp, message))
 
 class PPDisplay():
     def __init__(self, live) -> None:
@@ -311,7 +321,7 @@ def main(live, bg, br):
             top_start = multiplier
             interval_h = 0.86605 * multiplier
             interval_v = multiplier
-        elif bg == 'roll':
+        elif bg == 'roll' or bg == 'fireflies':
             gif_np_list = np.zeros((1, 30))
         elif os.path.isfile(bg + '.npy' ):
             with open(bg + '.npy', 'rb') as f:
@@ -346,6 +356,7 @@ def main(live, bg, br):
     disp = PPDisplay(live)
     # clock = Clock(left_start, top_start, interval_h, interval_v)
     roll = Roll()
+    ffs = Fireflies(ff_count=10, tail_len=8, color_list=[[255, 255, 0]])
     clock_brightness = 255
     bg_brightness = 100
     ms = 0
@@ -439,6 +450,8 @@ def main(live, bg, br):
                         raise RuntimeError('ws2811_render failed with code {0} ({1})'.format(resp, message))
                 if bg == 'roll':
                     roll.update()
+                if bg == 'fireflies':
+                    ffs.update()
                 else:         
                     disp.update_background(frame)
                     disp.update_clock(np.array([clock_brightness]*3))
