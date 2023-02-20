@@ -356,7 +356,7 @@ def main(live, bg, br):
     disp = PPDisplay(live)
     # clock = Clock(left_start, top_start, interval_h, interval_v)
     roll = Roll()
-    ffs = Fireflies(ff_count=10, tail_len=8, color_list=[[255, 255, 0]])
+    ffs = fireflies.Fireflies(ff_count=10, tail_len=8, color_list=[[255, 255, 0]])
     clock_brightness = 255
     bg_brightness = 100
     ms = 0
