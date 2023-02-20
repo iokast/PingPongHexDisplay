@@ -50,7 +50,7 @@ if resp != ws.WS2811_SUCCESS:
 def set_pixel_color(pixel_id, color32):
     ws.ws2811_led_set(channel, pixel_id, color32)
 
-def refresh_display(self):
+def refresh_display():
         resp = ws.ws2811_render(leds)
         if resp != ws.WS2811_SUCCESS:
             message = ws.ws2811_get_return_t_str(resp)
@@ -216,30 +216,15 @@ class Roll:
         self.bg_color = np.array([0,0,0]).astype(int)
         self.dot_color = np.array([255,255,255]).astype(int)
         self.tail = 1
-        self.tail_multiplier = 1
-        self.layer_colors_base = np.array([ [0  ,0,  0], #0    b g r
-                                            [240,   0,    0],
-                                            [180, 60, 0],
-                                            [120, 120, 0],
-                                            [60 ,180, 0],
-                                            [0  , 240, 0], #5
-                                            [0  , 180, 60],
-                                            [0  ,120,120],
-                                            [0  , 60, 180],
-                                            [0  , 0 , 240],
-                                            [60 , 0 , 180], #10
-                                            [120, 0 , 120]]).astype(int)
-                                    #   [255, 0, 0],
-                                    #   [200, 50, 0],
-                                    #   [150, 100, 0],
-                                    #   [100, 150, 0],
-                                    #   [50, 200, 0], #5
-                                    #   [0, 255, 50],
-                                    #   [0, 200, 100],
-                                    #   [0, 150, 150],
-                                    #   [0, 100, 200],
-                                    #   [0, 50, 250], #10
-                                    #   [50, 0, 250]]).astype(int)
+        self.tail_multiplier = 2
+        layer_colors_base = hazy_p
+
+        for i in range(len(layer_colors_base)):
+            for j in range(3):
+                layer_colors_base[i][j] = g[layer_colors_base[i][j]]
+
+        self.layer_colors_base = np.array(layer_colors_base).astype(int)
+
         self.layer_colors_all =  [[] for _ in range(12)]
         
         self.layers = []
@@ -266,7 +251,7 @@ class Roll:
                 
                 if len(self.layer_colors_all[i]) < tail_len:
                     c = (self.bg_color + (self.layer_colors_base[i, :] * j - self.bg_color) / tail_len).astype(int) # TODO: loop length replacing tail fixes the todo a few lines above
-                    self.layer_colors_all[i].append((int(c[1]) << 16) + (int(c[2]) << 8) + int(c[0]))
+                    self.layer_colors_all[i].append((int(c[1]) << 16) + (int(c[0]) << 8) + int(c[2]))
 
                 ws.ws2811_led_set(channel, self.layers[i][j], self.layer_colors_all[i][j])
                 ws.ws2811_led_set(channel, self.layers[i][k], self.layer_colors_all[i][j])
@@ -356,7 +341,7 @@ def main(live, bg, br):
     disp = PPDisplay(live)
     # clock = Clock(left_start, top_start, interval_h, interval_v)
     roll = Roll()
-    ffs = fireflies.Fireflies(ff_count=10, tail_len=8, color_list=[[255, 255, 0]])
+    ffs = fireflies.Fireflies(ff_count=11, tail_len=8, color_list=hazy_p[1:])
     clock_brightness = 255
     bg_brightness = 100
     ms = 0
@@ -448,9 +433,9 @@ def main(live, bg, br):
                     if resp != ws.WS2811_SUCCESS:
                         message = ws.ws2811_get_return_t_str(resp)
                         raise RuntimeError('ws2811_render failed with code {0} ({1})'.format(resp, message))
-                if bg == 'roll':
+                elif bg == 'roll':
                     roll.update()
-                if bg == 'fireflies':
+                elif bg == 'fireflies':
                     ffs.update()
                 else:         
                     disp.update_background(frame)
