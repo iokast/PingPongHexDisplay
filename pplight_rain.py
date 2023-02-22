@@ -11,6 +11,7 @@ import termios
 import cv2
 import random
 import fireflies
+from copy import deepcopy
 
 import _rpi_ws281x as ws
 
@@ -217,7 +218,7 @@ class Roll:
         self.dot_color = np.array([255,255,255]).astype(int)
         self.tail = 1
         self.tail_multiplier = 2
-        layer_colors_base = hazy_p
+        layer_colors_base = deepcopy(hazy_p)
 
         for i in range(len(layer_colors_base)):
             for j in range(3):
@@ -343,10 +344,10 @@ def main(live, bg, br):
     disp = PPDisplay(live)
     # clock = Clock(left_start, top_start, interval_h, interval_v)
     roll = Roll()
-    ffs = fireflies.Fireflies(ff_count=22, tail_len=6, color_list=hazy_p[1:])
+    ffs = fireflies.Fireflies(ff_count=11, tail_len=10, color_list=hazy_p[1:])
     clock_brightness = 255
     bg_brightness = 100
-    ms = 0
+    ms = 40
     current_gif_np = np.copy(gif_np_list[gif_id])
     previous_time = time.time()
     try:
