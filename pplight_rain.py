@@ -233,18 +233,15 @@ class Roll:
             q = [*range(i, -i, -1)] + [-i] * i + [*range(-i, i, 1)] + [i] * i
             r = q[2*i:] + q[:2*i]
             s = r[2*i:] + r[:2*i]
-            self.layers.append(list(zip(r, q, s)))
+            self.layers.append(list(zip(r, q, s))) # qsr order affects rotation start and direction
         
         # for each cube coord assign the pixel id
-##        print(self.layers[1])
         for i, coords in enumerate(cube_coords):
             layer_id = max(abs(coords))
             for j in range(len(self.layers[layer_id])):
                 if tuple(coords.tolist()) == self.layers[layer_id][j]:
                     self.layers[layer_id][j] = i
-##        print(self.layers[1])
                     
-        
     def update(self):
         for i in range(1, len(self.layers)): # for each ring
             tail_len = int(self.tail + self.tail_multiplier * i)
