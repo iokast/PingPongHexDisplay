@@ -25,7 +25,7 @@ class Fireflies():
     def render(self):
         for ff in self.fflist:
             for i, pid in enumerate(ff.pixel_ids):
-                ppl.set_pixel_color(pid, ff.colors[i])
+                ppl.set_pixel_color(pid, ff.colors[-i-1])
         ppl.refresh_display()
 
 
@@ -35,22 +35,30 @@ class Firefly():
         self.tail_len = tail_len
         self.adjacency = adjacency[pixel_id]
         # self.adjacency = [x for x in adjacency[pixel_id] if x is not None] # filter Nones from adjacency list
-        
-        colors = np.array([[g[int(color[0]*i/tail_len)], 
-                            g[int(color[1]*i/tail_len)], 
-                            g[int(color[2]*i/tail_len)]] for i in range(tail_len, -1, -1)], dtype=int)
+        color = [g[color[0]], g[color[1]], g[color[2]]]
+        colors = np.array([[color[0]*i/tail_len, 
+                            color[1]*i/tail_len, 
+                            color[2]*i/tail_len] for i in range(tail_len)], dtype=int)
         color_32 = (colors[:, 1] << 16) + (colors[:, 0] << 8) + colors[:, 2]
         self.colors = color_32.tolist()
+        self.last_dir = random.randint(0, 5)
         
     def move(self):
         # select an adjacent pixel_id that isn't adjacent to the previous TODO: make sure can't colide with other
+        if self.adjacency[self.last_dir] is None:
+            p0 = [0, .1, .2, .4, .2, .1]
+        else:
+            p0 = [.7, .1, .05, 0, .05, .1]
+
         isNone = True
-        print(self.adjacency)
-        while isNone:
-            adj_i = random.randint(0, 5)
-            new_pixel = self.adjacency[adj_i]
+        while isNone:                
+            prob = p0[-self.last_dir:] + p0[:-self.last_dir]
+            curr_dir = np.random.choice([0, 1, 2, 3, 4, 5], 1, p=prob)[0]
+            new_pixel = self.adjacency[curr_dir]
             if new_pixel is not None:
                 isNone = False
+                self.last_dir = curr_dir
+
         
         # update pixel list and adjacency list
         self.pixel_ids.insert(0, new_pixel)
@@ -61,8 +69,9 @@ class Firefly():
             # get pixel color. If it is equal to last color on color list, black out
 
         # get new adjacency list, removing previously visited and its neighbors.
-        last = (adj_i + 3) % 6
         self.adjacency = adjacency[new_pixel]
+
+##        last = (adj_i + 3) % 6
 ##        self.adjacency[last] = None
 ##        self.adjacency[(last - 1) % 6] = None
 ##        self.adjacency[(last + 1) % 6] = None

@@ -227,19 +227,23 @@ class Roll:
 
         self.layer_colors_all =  [[] for _ in range(12)]
         
+        # generate cube coords for each layer/ring
         self.layers = []
         for i in range(12):
-            s = [*range(i, -i, -1)] + [-i] * i + [*range(-i, i, 1)] + [i] * i
-            r = s[2*i:] + s[:2*i]
-            q = r[2*i:] + r[:2*i]
-            self.layers.append(list(zip(q, r, s)))
+            q = [*range(i, -i, -1)] + [-i] * i + [*range(-i, i, 1)] + [i] * i
+            r = q[2*i:] + q[:2*i]
+            s = r[2*i:] + r[:2*i]
+            self.layers.append(list(zip(r, q, s)))
         
+        # for each cube coord assign the pixel id
+##        print(self.layers[1])
         for i, coords in enumerate(cube_coords):
             layer_id = max(abs(coords))
             for j in range(len(self.layers[layer_id])):
-                
                 if tuple(coords.tolist()) == self.layers[layer_id][j]:
                     self.layers[layer_id][j] = i
+##        print(self.layers[1])
+                    
         
     def update(self):
         for i in range(1, len(self.layers)): # for each ring
@@ -275,7 +279,7 @@ def main(live, bg, br):
         
     if bg == "all":
         filelist = []
-        for file in os.listdir():
+        for file in os.listdir('gifs'):
             if file.endswith(".gif"):
                 filelist.append(file[:-4])
     else:
@@ -308,11 +312,11 @@ def main(live, bg, br):
             interval_v = multiplier
         elif bg == 'roll' or bg == 'fireflies':
             gif_np_list = np.zeros((1, 30))
-        elif os.path.isfile(bg + '.npy' ):
-            with open(bg + '.npy', 'rb') as f:
+        elif os.path.isfile('gifs/np/' + bg + '.npy' ):
+            with open('gifs/np/' + bg + '.npy', 'rb') as f:
                 gif_np_list.append(np.load(f))
         else:
-            np_frames, extensions, image_specifications = gif2numpy.convert(bg + '.gif')
+            np_frames, extensions, image_specifications = gif2numpy.convert('gifs/' + bg + '.gif')
             w, h, _ = np_frames[0].shape
             multiplier = min(w, h) / 23.
             gif_coords = cartesian_coords * multiplier
@@ -320,7 +324,7 @@ def main(live, bg, br):
             whex = np.max(gif_coords[:,1])
             left_margin = (w - whex)/2
             gif_coords[:,1] = gif_coords[:,1] + left_margin
-            gif_coords[:,0] = gif_coords[:,1] + (multiplier / 2)
+            gif_coords[:,0] = gif_coords[:,0] + (multiplier / 2)
             gif_coords = gif_coords.astype(int)
 
 
@@ -328,9 +332,10 @@ def main(live, bg, br):
             np_frames_reduced = np.zeros((len(np_frames), 397, 3), dtype=int)
             for i, frame in enumerate(np_frames):
                 for j in range(397):
-                    np_frames_reduced[i, j, :] = frame[gif_coords[j,0], gif_coords[j,1], :]
+                    for k in range(3):
+                        np_frames_reduced[i, j, k] = g[frame[gif_coords[j,0], gif_coords[j,1], k]]
 
-            with open(bg + '.npy', 'wb') as f:
+            with open('gifs/np/' + bg + '.npy', 'wb') as f:
                 np.save(f, np_frames_reduced)
 
             gif_np_list.append(np_frames_reduced)
@@ -341,7 +346,7 @@ def main(live, bg, br):
     disp = PPDisplay(live)
     # clock = Clock(left_start, top_start, interval_h, interval_v)
     roll = Roll()
-    ffs = fireflies.Fireflies(ff_count=11, tail_len=8, color_list=hazy_p[1:])
+    ffs = fireflies.Fireflies(ff_count=22, tail_len=6, color_list=hazy_p[1:])
     clock_brightness = 255
     bg_brightness = 100
     ms = 0
