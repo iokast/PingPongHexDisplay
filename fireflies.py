@@ -17,16 +17,16 @@ class Fireflies():
     def destroy_ff(self,):
         # delete a firefly, maybe not necesary
         return
-    def update(self):
+    def update(self, strip):
         for ff in self.fflist:
             ff.move()
-        self.render()
+        self.render(strip)
 
-    def render(self):
+    def render(self, strip):
         for ff in self.fflist:
             for i, pid in enumerate(ff.pixel_ids):
-                ppl.set_pixel_color(pid, ff.colors[-i-1])
-        ppl.refresh_display()
+                strip.set_pixel_color(pid, ff.colors[-i-1])
+        strip.refresh_display()
 
 
 class Firefly():
