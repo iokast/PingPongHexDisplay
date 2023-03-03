@@ -101,6 +101,7 @@ class Gif():
 
     def gif_change(self, incr):
         self.gif_id = (self.gif_id + incr) % len(self.gif_np_list)
+        self.frame_id = 0
         self.brightness_change(0)
 
     def brightness_change(self, incr):

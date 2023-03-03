@@ -30,6 +30,7 @@ def main(live, bg, br):
     fireflies = Fireflies(ff_count=11, tail_len=10, color_list=color_palette_11[cols_id])
     rain = Rain()
     mode = [gif, spin, fireflies, rain]
+    mode_names = ['gif', 'spin', 'fireflies', 'rain']
 
     # Setup clock
     clock = Clock()
@@ -62,12 +63,12 @@ def main(live, bg, br):
                         print("All Bright Down: ", strip.brightness)
                         time.sleep(.1)
                     elif c == 's': 
-                        gif.gif_change(1, bg_brightness)
+                        gif.gif_change(1)
                         print("Next GIF: ", gif.gif_id, gif.filelist[gif.gif_id])
                         time.sleep(.1)
                         break
                     elif c == 'a': 
-                        gif.gif_change(-1, bg_brightness)
+                        gif.gif_change(-1)
                         print("Prev GIF: ", gif.gif_id, gif.filelist[gif.gif_id])
                         time.sleep(.1)
                         break
@@ -97,6 +98,16 @@ def main(live, bg, br):
                         ms = min(ms + 10, 500)
                         print("Interval Up (ms): ", ms)
                         time.sleep(.1)
+                    elif c == 't': 
+                        mode_id = (mode_id - 1) % len(mode)
+                        print("Prev Mode: ", mode_id, mode_names[mode_id])
+                        time.sleep(.1)
+                        break
+                    elif c == 'y': 
+                        mode_id = (mode_id + 1) % len(mode)
+                        print("Next Mode: ", mode_id, mode_names[mode_id])
+                        time.sleep(.1)
+                        break
      
                 mode[mode_id].update(strip)
                 

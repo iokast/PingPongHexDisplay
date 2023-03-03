@@ -28,6 +28,7 @@ class Spin:
     def set_col_bands(self, color_palette):
         layer_colors_base = deepcopy(color_palette)
 
+        layer_colors_base = [[0,0,0]] + layer_colors_base
         for i in range(len(layer_colors_base)):
             for j in range(3):
                 layer_colors_base[i][j] = g[layer_colors_base[i][j]]

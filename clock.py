@@ -5,7 +5,7 @@ import time
 
 class Clock():
     def __init__(self, start_pos=[38, 42, 48,52], colon_pos=[112,66]):
-        self.hhmm_ids = np.zeros((4, 5, 3))
+        self.hhmm_ids = np.zeros((4, 5, 3), dtype=int)
         self.hhmm_ids[0, 0, 1] = start_pos[0]
         self.hhmm_ids[1, 0, 1] = start_pos[1]
         self.hhmm_ids[2, 0, 1] = start_pos[2]
