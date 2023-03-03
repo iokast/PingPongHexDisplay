@@ -1,7 +1,7 @@
 import numpy as np
 from hex_mask import *
 import random
-import pplight_rain as ppl
+import led_strip as strip
 
 class Fireflies():
     def __init__(self, ff_count, tail_len, color_list):
@@ -64,15 +64,10 @@ class Firefly():
         self.pixel_ids.insert(0, new_pixel)
         if len(self.pixel_ids) > self.tail_len:
             # remove end of tail and revert color
-            ppl.set_pixel_color(self.pixel_ids.pop(), 0)
+            strip.set_pixel_color(self.pixel_ids.pop(), 0)
             
             # get pixel color. If it is equal to last color on color list, black out
 
         # get new adjacency list, removing previously visited and its neighbors.
         self.adjacency = adjacency[new_pixel]
-
-##        last = (adj_i + 3) % 6
-##        self.adjacency[last] = None
-##        self.adjacency[(last - 1) % 6] = None
-##        self.adjacency[(last + 1) % 6] = None
         
