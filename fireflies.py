@@ -5,9 +5,11 @@ import random
 class Fireflies():
     def __init__(self, ff_count, tail_len, color_list):
         self.fflist = []
+        self.ff_count = ff_count
+        self.tail_len = tail_len
         color_i = 0
-        for i in range(ff_count):
-            self.fflist.append(Firefly(random.randint(0, 396), tail_len, color_list[color_i]))
+        for i in range(self.ff_count):
+            self.fflist.append(Firefly(random.randint(0, 396), self.tail_len, color_list[color_i]))
             color_i = (color_i + 1) % len(color_list)
 
     def add_ff(self,):
@@ -20,6 +22,13 @@ class Fireflies():
         for ff in self.fflist:
             ff.move(strip)
         self.render(strip)
+
+    def set_palette(self, color_palette):
+        self.fflist = []
+        color_i = 0
+        for i in range(self.ff_count):
+            self.fflist.append(Firefly(random.randint(0, 396), self.tail_len, color_palette[color_i]))
+            color_i = (color_i + 1) % len(color_palette)
 
     def render(self, strip):
         for ff in self.fflist:
@@ -37,7 +46,7 @@ class Firefly():
         color = [g[color[0]], g[color[1]], g[color[2]]]
         colors = np.array([[color[0]*i/tail_len, 
                             color[1]*i/tail_len, 
-                            color[2]*i/tail_len] for i in range(tail_len)], dtype=int)
+                            color[2]*i/tail_len] for i in range(1, tail_len+1)], dtype=int)
         color_32 = (colors[:, 1] << 16) + (colors[:, 0] << 8) + colors[:, 2]
         self.colors = color_32.tolist()
         self.last_dir = random.randint(0, 5)

@@ -23,11 +23,18 @@ def main(live, bg, br):
     ms = 40
     num_of_loops = 30
     cols_id = 5
+    help_message =  "q/w: Overall Brightness (down/up)\n" \
+                    "a/s: Gif (previous/next)\n" \
+                    "z/x: Time Delay (down/up)\n" \
+                    "t/y: Animation Mode (previous/next)\n" \
+                    "o/p: Clock Brightness (down/up)\n" \
+                    "k/l: Background Brightness (down/up)\n" \
+                    "n/m: Color Palette (previous/next)"
 
     # Setup animation modes
     gif = Gif()
     spin = Spin(color_palette=color_palette_11[cols_id])
-    fireflies = Fireflies(ff_count=11, tail_len=2, color_list=color_palette_11[cols_id])
+    fireflies = Fireflies(ff_count=11, tail_len=8, color_list=color_palette_11[cols_id])
     rain = Rain()
     mode = [gif, spin, fireflies, rain]
     mode_names = ['gif', 'spin', 'fireflies', 'rain']
@@ -109,6 +116,25 @@ def main(live, bg, br):
                         print("Next Mode: ", mode_id, mode_names[mode_id])
                         time.sleep(input_delay)
                         break
+                    elif c == 'n': 
+                        cols_id = (cols_id - 1) % len(color_palette_11)
+                        try:
+                            mode.set_palette(color_palette_11[cols_id])
+                            print("Next Color Palette: ", cols_id)
+                        except:
+                            print("No set_palette function")
+                        break
+                    elif c == 'm': 
+                        cols_id = (cols_id + 1) % len(color_palette_11)
+                        try:
+                            mode.set_palette(color_palette_11[cols_id])
+                            print("Next Color Palette: ", cols_id)
+                        except:
+                            print("No set_palette function")
+                        time.sleep(input_delay)
+                        break
+                    elif c == 'h':
+                        print(help_message) 
      
                 mode[mode_id].update(strip)
                 

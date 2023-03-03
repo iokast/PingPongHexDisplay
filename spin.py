@@ -8,7 +8,7 @@ class Spin:
         self.dot_color = np.array([255,255,255]).astype(int)
         self.tail = 1
         self.tail_multiplier = 2
-        self.set_col_bands(color_palette)
+        self.set_palette(color_palette)
         
         # generate cube coords for each layer/ring
         self.layers = []
@@ -25,7 +25,7 @@ class Spin:
                 if tuple(coords.tolist()) == self.layers[layer_id][j]:
                     self.layers[layer_id][j] = i
         
-    def set_col_bands(self, color_palette):
+    def set_palette(self, color_palette):
         layer_colors_base = deepcopy(color_palette)
 
         layer_colors_base = [[0,0,0]] + layer_colors_base
