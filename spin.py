@@ -37,7 +37,7 @@ class Spin:
         self.layer_colors_all =  [[] for _ in range(12)]
 
         # make a color band for each ring
-        for i in range(12):
+        for i in range(1, 12):
             tail_len = int(self.tail + self.tail_multiplier * i)
             for j in range(0, tail_len):
                 # get a color band fade out of length tail_len
