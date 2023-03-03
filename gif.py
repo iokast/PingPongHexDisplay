@@ -1,18 +1,8 @@
 import numpy as np
 import gif2numpy
 from hex_mask import *
-import argparse
 import time
 import os
-import sys
-import select
-import tty
-import termios
-import cv2
-import random
-import fireflies
-from copy import deepcopy
-
 
 class Gif():
     def __init__(self) -> None:

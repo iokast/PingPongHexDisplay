@@ -1,23 +1,8 @@
 import numpy as np
-import gif2numpy
 from hex_mask import *
-import argparse
-import time
-import os
-import sys
-import select
-import tty
-import termios
 import cv2
 import random
-import fireflies
-from copy import deepcopy
-from copy import deepcopy
-from rain import Rain
-from clock import Clock
-from led_strip import LedStrip
-from gif import Gif
-from spin import Spin
+
 
 class Rain:
     def __init__(self, size=100, blur=8, thickness=5, growth_spd=1, drop_interval=10):
