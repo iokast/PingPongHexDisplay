@@ -27,7 +27,7 @@ def main(live, bg, br):
     # Setup animation modes
     gif = Gif()
     spin = Spin(color_palette=color_palette_11[cols_id])
-    fireflies = Fireflies(ff_count=11, tail_len=10, color_list=color_palette_11[cols_id])
+    fireflies = Fireflies(ff_count=11, tail_len=2, color_list=color_palette_11[cols_id])
     rain = Rain()
     mode = [gif, spin, fireflies, rain]
     mode_names = ['gif', 'spin', 'fireflies', 'rain']
@@ -45,6 +45,7 @@ def main(live, bg, br):
     # run display loop
     previous_time = time.time()
     mode_id = 0
+    input_delay = .4
     try:
         while True:
             t0 = time.time()
@@ -57,56 +58,56 @@ def main(live, bg, br):
                     if c== 'w': 
                         strip.change_brightness(20)
                         print("All Bright Up: ", strip.brightness)
-                        time.sleep(.1)
+                        time.sleep(input_delay)
                     elif c == 'q': 
                         strip.change_brightness(-20)
                         print("All Bright Down: ", strip.brightness)
-                        time.sleep(.1)
+                        time.sleep(input_delay)
                     elif c == 's': 
                         gif.gif_change(1)
                         print("Next GIF: ", gif.gif_id, gif.filelist[gif.gif_id])
-                        time.sleep(.1)
+                        time.sleep(input_delay)
                         break
                     elif c == 'a': 
                         gif.gif_change(-1)
                         print("Prev GIF: ", gif.gif_id, gif.filelist[gif.gif_id])
-                        time.sleep(.1)
+                        time.sleep(input_delay)
                         break
                     elif c == 'p': 
                         clock_brightness = min(clock_brightness + 20, 255)
                         print("Clock Bright Up: ", clock_brightness)
-                        time.sleep(.1)
+                        time.sleep(input_delay)
                     elif c == 'o': 
                         clock_brightness = max(clock_brightness - 20, 0)
                         print("Clock Bright Down: ", clock_brightness)
-                        time.sleep(.1)
+                        time.sleep(input_delay)
                     elif c == 'l': 
                         gif.brightness_change(10)   # TODO: Might want to make this applicable to all animations
                         print("BG Bright Up (%): ", gif.brightness)
-                        time.sleep(.1)
+                        time.sleep(input_delay)
                         break
                     elif c == 'k': 
                         gif.brightness_change(10)   # TODO: Might want to make this applicable to all animations
                         print("BG Bright Down (%): ", gif.brightness)
-                        time.sleep(.1)
+                        time.sleep(input_delay)
                         break
                     elif c == 'z': 
                         ms = max(ms - 10, 0)
                         print("Interval Down (ms): ", ms)
-                        time.sleep(.1)
+                        time.sleep(input_delay)
                     elif c == 'x': 
                         ms = min(ms + 10, 500)
                         print("Interval Up (ms): ", ms)
-                        time.sleep(.1)
+                        time.sleep(input_delay)
                     elif c == 't': 
                         mode_id = (mode_id - 1) % len(mode)
                         print("Prev Mode: ", mode_id, mode_names[mode_id])
-                        time.sleep(.1)
+                        time.sleep(input_delay)
                         break
                     elif c == 'y': 
                         mode_id = (mode_id + 1) % len(mode)
                         print("Next Mode: ", mode_id, mode_names[mode_id])
-                        time.sleep(.1)
+                        time.sleep(input_delay)
                         break
      
                 mode[mode_id].update(strip)

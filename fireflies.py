@@ -1,7 +1,6 @@
 import numpy as np
 from hex_mask import *
 import random
-import led_strip as strip
 
 class Fireflies():
     def __init__(self, ff_count, tail_len, color_list):
@@ -19,7 +18,7 @@ class Fireflies():
         return
     def update(self, strip):
         for ff in self.fflist:
-            ff.move()
+            ff.move(strip)
         self.render(strip)
 
     def render(self, strip):
@@ -43,7 +42,7 @@ class Firefly():
         self.colors = color_32.tolist()
         self.last_dir = random.randint(0, 5)
         
-    def move(self):
+    def move(self, strip):
         # select an adjacent pixel_id that isn't adjacent to the previous TODO: make sure can't colide with other
         if self.adjacency[self.last_dir] is None:
             p0 = [0, .1, .2, .4, .2, .1]
@@ -64,7 +63,8 @@ class Firefly():
         self.pixel_ids.insert(0, new_pixel)
         if len(self.pixel_ids) > self.tail_len:
             # remove end of tail and revert color
-            strip.set_pixel_color(self.pixel_ids.pop(), 0)
+            # strip.set_pixel_color(self.pixel_ids.pop(), 0)
+            self.pixel_ids.pop()
             
             # get pixel color. If it is equal to last color on color list, black out
 

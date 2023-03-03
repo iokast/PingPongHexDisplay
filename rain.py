@@ -80,6 +80,6 @@ class Rain:
         background_32 = (background[:,:,1] << 16) + (background[:,:,2] << 8) + background[:,:,0]
         
         for pixel_id in range(397):
-            strip.set_pixel_color(self, pixel_id, int(background_32[self.gif_coords[pixel_id, 0], self.gif_coords[pixel_id, 1]]))
+            strip.set_pixel_color(pixel_id, int(background_32[self.gif_coords[pixel_id, 0], self.gif_coords[pixel_id, 1]]))
             
         strip.refresh_display()
