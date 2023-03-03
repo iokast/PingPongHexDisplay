@@ -1,7 +1,6 @@
 import numpy as np
 from hex_mask import *
 import random
-import pplight_rain as ppl
 import time
 
 class Clock():
