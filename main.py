@@ -17,21 +17,24 @@ def main(live, bg, br):
     # Setup LED Strip 
     strip = LedStrip()
 
+    # Setup initial parameters
+    clock_brightness = 255
+    bg_brightness = 100
+    ms = 40
+    num_of_loops = 30
+    cols_id = 5
+
     # Setup animation modes
     gif = Gif()
-    spin = Spin()
-    fireflies = Fireflies(ff_count=11, tail_len=10, color_list=hazy_p[1:])
+    spin = Spin(color_palette=color_palette_11[cols_id])
+    fireflies = Fireflies(ff_count=11, tail_len=10, color_list=color_palette_11[cols_id])
     rain = Rain()
     mode = [gif, spin, fireflies, rain]
 
     # Setup clock
     clock = Clock()
     
-    # Setup initial parameters
-    clock_brightness = 255
-    bg_brightness = 100
-    ms = 40
-    num_of_loops = 30
+
 
     # Setup for keyboard input
     def isData():
