@@ -127,7 +127,7 @@ def main(live, bg, br):
                     elif c == 'm': 
                         cols_id = (cols_id + 1) % len(color_palette_11)
                         try:
-                            mode.set_palette(color_palette_11[cols_id])
+                            mode[mode_id].set_palette(color_palette_11[cols_id])
                             print("Next Color Palette: ", cols_id)
                         except:
                             print("No set_palette function")

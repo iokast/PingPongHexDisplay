@@ -1,52 +1,74 @@
 import numpy as np
 from hex_mask import *
 from copy import deepcopy
+import random
 
-class Spin:
+class Expanse:
     def __init__(self, color_palette):
-        self.bg_color = np.array([0,0,0]).astype(int)
-        self.dot_color = np.array([255,255,255]).astype(int)
-        self.tail = 1
-        self.tail_multiplier = 2
+        self.color_palette
         self.set_palette(color_palette)
-        
-        # generate cube coords for each layer/ring
-        self.layers = []
-        for i in range(12):
-            q = [*range(i, -i, -1)] + [-i] * i + [*range(-i, i, 1)] + [i] * i
-            r = q[2*i:] + q[:2*i]
-            s = r[2*i:] + r[:2*i]
-            self.layers.append(list(zip(r, q, s))) # qsr order affects rotation start and direction
-        
-        # for each cube coord assign the pixel id
-        for i, coords in enumerate(cube_coords):
-            layer_id = max(abs(coords))
-            for j in range(len(self.layers[layer_id])):
-                if tuple(coords.tolist()) == self.layers[layer_id][j]:
-                    self.layers[layer_id][j] = i
+
+        self.color_bins = {}
+        for i in range(len(self.color_palette)):
+            if i == 0:
+                self.color_bins[i] = set(range(397))
+            else:
+                self.color_bins[i] = set()
         
     def set_palette(self, color_palette):
-        layer_colors_base = deepcopy(color_palette)
-
-        layer_colors_base = [[0,0,0]] + layer_colors_base
-        for i in range(len(layer_colors_base)):
-            for j in range(3):
-                layer_colors_base[i][j] = g[layer_colors_base[i][j]]
-
-        self.layer_colors_base = np.array(layer_colors_base).astype(int)
-
-        self.layer_colors_all =  [[] for _ in range(12)]
-
-        # make a color band for each ring
-        for i in range(11):
-            tail_len = int(self.tail + self.tail_multiplier * (i+1))
-            for j in range(0, tail_len):
-                # get a color band fade out of length tail_len
-                c = (self.bg_color + (self.layer_colors_base[i+1, :] * j - self.bg_color) / tail_len).astype(int)
-                self.layer_colors_all[i+1].append((int(c[1]) << 16) + (int(c[0]) << 8) + int(c[2]))
-
+        for c in color_palette:
+            self.color_palette.append((int(c[1]) << 16) + (int(c[0]) << 8) + int(c[2]))
 
     def update(self, strip):
+        num_bins = len(self.color_bins)
+        for i, bin in enumerate(self.color_bins.values()):
+            # check if there are sufficient pixels in current bin and none in the next, if so move a random pixel to the next bin
+            seed_count = 1
+            if len(bin) > 0 and len(self.color_bins[(i+1) % num_bins]) < 10:
+                for j in range(seed_count):
+                    seed_pixel = random.sample(bin, 1)[0]
+                    # check that it is only touchin
+                    #  current bins colors
+                    isolated = True
+                    for adj_id in led_adjacency[seed_pixel]:
+                        if adj_id not in bin: #.union(self.color_bins[(i-1) % num_bins], self.color_bins[(i-2) % num_bins]):
+                            isolated = False
+                    if isolated:
+                        self.color_bins[(i+1) % num_bins].add(seed_pixel)
+                        self.color_bins[i].remove(seed_pixel)
+                        self.hex_map[seed_pixel].change_color(self.color_palette[i])
+
+                        # # mark seed pixel for debugging
+                        # hexagon = self.hex_map[seed_pixel]
+                        # text = self.font.render('S', False, (0, 0, 0))
+                        # text.set_alpha(160)
+                        # text_pos = hexagon.get_position() + self.center
+                        # text_pos -= (text.get_width() / 2, text.get_height() / 2)
+                        # self.main_surf.blit(text, text_pos)
+                        # pg.display.update()
+                        # self.clock.tick(2)
+            
+            move_to_next_bin = set()
+            
+            # iterate through pixels in bin
+            for pix_id in bin:
+                adjacent_count = 0
+                not_frontline = True
+                for adj_id in led_adjacency[pix_id]:
+                    if adj_id in self.color_bins[(i+1) % num_bins].union(self.color_bins[(i+2) % num_bins], self.color_bins[(i+3) % num_bins]):
+                        adjacent_count += 1
+                    if adj_id in self.color_bins[(i-2) % num_bins]:
+                        not_frontline = False
+                if not_frontline and random.random() < (adjacent_count / 10): # Make proportional to max possible adjacent
+                    move_to_next_bin.add(pix_id)
+                    self.hex_map[pix_id].change_color(self.color_palette[i])
+            
+            # move selected pixels from current bin to next bin
+            self.color_bins[i] -= move_to_next_bin
+            self.color_bins[(i+1) % num_bins].update(move_to_next_bin)
+        
+        
+        
         for i in range(1, len(self.layers)): # for each ring
             tail_len = int(self.tail + self.tail_multiplier * i)
             for j in range(0, tail_len): # for each pixel in a segment  TODO: this produces weird colors with tail + i, why?

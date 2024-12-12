@@ -112,5 +112,6 @@ class Gif():
         self.update_background(self.current_gif_np[self.frame_id])
         self.update_pixel_color(strip)            
         strip.refresh_display()
-        self.frame_id = (self.frame_id + 1) % self.current_gif_np.shape[0]       
+        self.frame_id = (self.frame_id + 1) % self.current_gif_np.shape[0]
+     
 
