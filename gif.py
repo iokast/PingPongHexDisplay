@@ -48,7 +48,7 @@ class Gif():
                 for i, frame in enumerate(np_frames):
                     for j in range(397):
                         for k in range(3):
-                            np_frames_reduced[i, j, k] = g[frame[gif_coords[j,0], gif_coords[j,1], k]]
+                            np_frames_reduced[i, j, k] = gamma_adj[frame[gif_coords[j,0], gif_coords[j,1], k]]
 
                 with open('gifs/np/' + bg + '.npy', 'wb') as f:
                     np.save(f, np_frames_reduced)

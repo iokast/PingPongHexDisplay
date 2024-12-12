@@ -43,7 +43,7 @@ class Firefly():
         self.tail_len = tail_len
         self.adjacency = adjacency[pixel_id]
         # self.adjacency = [x for x in adjacency[pixel_id] if x is not None] # filter Nones from adjacency list
-        color = [g[color[0]], g[color[1]], g[color[2]]]
+        color = [gamma_adj[color[0]], gamma_adj[color[1]], gamma_adj[color[2]]]
         colors = np.array([[color[0]*i/tail_len, 
                             color[1]*i/tail_len, 
                             color[2]*i/tail_len] for i in range(1, tail_len+1)], dtype=int)

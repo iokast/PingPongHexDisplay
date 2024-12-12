@@ -31,7 +31,7 @@ class Spin:
         layer_colors_base = [[0,0,0]] + layer_colors_base
         for i in range(len(layer_colors_base)):
             for j in range(3):
-                layer_colors_base[i][j] = g[layer_colors_base[i][j]]
+                layer_colors_base[i][j] = gamma_adj[layer_colors_base[i][j]]
 
         self.layer_colors_base = np.array(layer_colors_base).astype(int)
 
