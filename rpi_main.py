@@ -45,11 +45,7 @@ def main(live, bg, br):
     fireflies = Fireflies(ff_count=11, tail_len=6, color_list=color_palette_11[cols_id])
     rain = Rain()
     mode = [gif, spin, fireflies, rain, expanse]
-    mode_names = ['expanse', 'gif', 'spin', 'fireflies', 'rain']
-
-    # Setup clock
-    clock = Clock()
-    
+    mode_names = ['gif', 'spin', 'fireflies', 'rain', 'expanse']
 
 
     # Setup for keyboard input
