@@ -18,6 +18,9 @@ from gif import Gif
 from spin import Spin
 from expanse import Expanse
 
+def adjust_gamma(color_palette):
+     return [[gamma_adj[value] for value in row] for row in color_palette]
+
 def main(live, bg, br):
 
     # Setup LED Strip 
@@ -41,7 +44,7 @@ def main(live, bg, br):
     # Setup animation modes
     # gif = Gif()
     # spin = Spin(color_palette=color_palette_11[cols_id])
-    expanse = Expanse(color_palette=color_palette_11[cols_id], alpha=alpha_bg)
+    expanse = Expanse(color_palette=adjust_gamma(color_palette_11[cols_id]), alpha=alpha_bg)
     # fireflies = Fireflies(ff_count=11, tail_len=6, color_list=color_palette_11[cols_id])
     # rain = Rain()
     mode = [expanse]
@@ -124,7 +127,7 @@ def main(live, bg, br):
                     elif c == 'n': 
                         cols_id = (cols_id - 1) % len(color_palette_11)
                         try:
-                            mode[mode_id].set_palette(color_palette_11[cols_id])
+                            mode[mode_id].set_palette(adjust_gamma(color_palette_11[cols_id]))
                             print("Next Color Palette: ", cols_id)
                         except:
                             print("No set_palette function")
@@ -132,7 +135,7 @@ def main(live, bg, br):
                     elif c == 'm': 
                         cols_id = (cols_id + 1) % len(color_palette_11)
                         try:
-                            mode[mode_id].set_palette(color_palette_11[cols_id])
+                            mode[mode_id].set_palette(adjust_gamma(color_palette_11[cols_id]))
                             print("Next Color Palette: ", cols_id)
                         except:
                             print("No set_palette function")
@@ -146,7 +149,7 @@ def main(live, bg, br):
                 
                 state = np.clip(state, 0, 255)
 
-                state_24bit = (state[:, 1].astype(np.uint32) << 16) | (state[:, 0].astype(np.uint32) << 8) | state[:, 2].astype(np.uint32)
+                state_24bit = ((state[:, 1] << 16) | (state[:, 0] << 8) | state[:, 2]).tolist()
                 
                 for pix_id, color in enumerate(state_24bit):
                     strip.set_pixel_color(pix_id, color)
