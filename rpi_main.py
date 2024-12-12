@@ -25,8 +25,8 @@ def main(live, bg, br):
     strip.brightness = 100
 
     # Setup initial parameters
-    clock_brightness = 255
-    bg_brightness = 100
+    alpha_clk = .4
+    alpha_bg = .5
     ms = 40
     num_of_loops = 30
     cols_id = 0
@@ -39,14 +39,15 @@ def main(live, bg, br):
                     "n/m: Color Palette (previous/next)"
 
     # Setup animation modes
-    gif = Gif()
-    spin = Spin(color_palette=color_palette_11[cols_id])
-    expanse = Expanse(color_palette=color_palette_11[cols_id])
-    fireflies = Fireflies(ff_count=11, tail_len=6, color_list=color_palette_11[cols_id])
-    rain = Rain()
-    mode = [gif, spin, fireflies, rain, expanse]
-    mode_names = ['gif', 'spin', 'fireflies', 'rain', 'expanse']
+    # gif = Gif()
+    # spin = Spin(color_palette=color_palette_11[cols_id])
+    expanse = Expanse(color_palette=color_palette_11[cols_id], alpha=alpha_bg)
+    # fireflies = Fireflies(ff_count=11, tail_len=6, color_list=color_palette_11[cols_id])
+    # rain = Rain()
+    mode = [expanse]
+    mode_names = ['expanse']
 
+    clock = Clock([255,255,255], alpha_clk)
 
     # Setup for keyboard input
     def isData():
@@ -74,16 +75,16 @@ def main(live, bg, br):
                         strip.change_brightness(-20)
                         print("All Bright Down: ", strip.brightness)
                         time.sleep(input_delay)
-                    elif c == 's': 
-                        gif.gif_change(1)
-                        print("Next GIF: ", gif.gif_id, gif.filelist[gif.gif_id])
-                        time.sleep(input_delay)
-                        break
-                    elif c == 'a': 
-                        gif.gif_change(-1)
-                        print("Prev GIF: ", gif.gif_id, gif.filelist[gif.gif_id])
-                        time.sleep(input_delay)
-                        break
+                    # elif c == 's': 
+                    #     gif.gif_change(1)
+                    #     print("Next GIF: ", gif.gif_id, gif.filelist[gif.gif_id])
+                    #     time.sleep(input_delay)
+                    #     break
+                    # elif c == 'a': 
+                    #     gif.gif_change(-1)
+                    #     print("Prev GIF: ", gif.gif_id, gif.filelist[gif.gif_id])
+                    #     time.sleep(input_delay)
+                    #     break
                     elif c == 'p': 
                         clock_brightness = min(clock_brightness + 20, 255)
                         print("Clock Bright Up: ", clock_brightness)
@@ -92,16 +93,16 @@ def main(live, bg, br):
                         clock_brightness = max(clock_brightness - 20, 0)
                         print("Clock Bright Down: ", clock_brightness)
                         time.sleep(input_delay)
-                    elif c == 'l': 
-                        gif.brightness_change(10)   # TODO: Might want to make this applicable to all animations
-                        print("BG Bright Up (%): ", gif.brightness)
-                        time.sleep(input_delay)
-                        break
-                    elif c == 'k': 
-                        gif.brightness_change(10)   # TODO: Might want to make this applicable to all animations
-                        print("BG Bright Down (%): ", gif.brightness)
-                        time.sleep(input_delay)
-                        break
+                    # elif c == 'l': 
+                    #     gif.brightness_change(10)   # TODO: Might want to make this applicable to all animations
+                    #     print("BG Bright Up (%): ", gif.brightness)
+                    #     time.sleep(input_delay)
+                    #     break
+                    # elif c == 'k': 
+                    #     gif.brightness_change(10)   # TODO: Might want to make this applicable to all animations
+                    #     print("BG Bright Down (%): ", gif.brightness)
+                    #     time.sleep(input_delay)
+                    #     break
                     elif c == 'z': 
                         ms = max(ms - 10, 0)
                         print("Interval Down (ms): ", ms)
@@ -139,8 +140,18 @@ def main(live, bg, br):
                         break
                     elif c == 'h':
                         print(help_message) 
-     
-                mode[mode_id].update(strip)
+ 
+                state = mode[mode_id].update(strip)
+                state = state + clock.update(strip)
+                
+                state = np.clip(state, 0, 255)
+
+                state_24bit = (state[:, 1].astype(np.uint32) << 16) | (state[:, 0].astype(np.uint32) << 8) | state[:, 2].astype(np.uint32)
+                
+                for pix_id, color in enumerate(state_24bit):
+                    strip.set_pixel_color(pix_id, color)
+
+                strip.refresh_display()
                 
                 elapsed = time.time() - previous_time
                 time.sleep(max(0, (ms / 1000.0) - elapsed))

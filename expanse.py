@@ -3,7 +3,8 @@ from hex_mask import led_adjacency
 import random
 
 class Expanse:
-    def __init__(self, color_palette):
+    def __init__(self, color_palette, alpha):
+        self.alpha = alpha
         self.set_palette(color_palette)
         self.state = np.zeros((397,3), dtype=int)
 
@@ -19,10 +20,10 @@ class Expanse:
     def set_palette(self, color_palette):
         # cp_arr = np.asarray(color_palette)
         # cp_arr = np.column_stack((cp_arr, np.full(cp_arr.shape[0])))
-        self.color_palette = color_palette
-        self.color_palette_bit = []
-        for c in color_palette:
-            self.color_palette_bit.append((int(c[1]) << 16) + (int(c[0]) << 8) + int(c[2]))
+        self.color_palette = (np.asarray(color_palette) * self.alpha).astype(int)
+        # self.color_palette_bit = []
+        # for c in color_palette:
+        #     self.color_palette_bit.append((int(c[3]) << 24) (int(c[1]) << 16) + (int(c[0]) << 8) + int(c[2]))
 
     def update(self, strip=None, hex_map=None):
         num_bins = len(self.color_bins)
@@ -76,7 +77,7 @@ class Expanse:
                     move_to_next_bin.add(pix_id)
                     if strip:
                         # strip.set_pixel_color(pix_id, self.color_palette_bit[i])
-                        self.state[pix_id] = self.color_palette_bit[i]
+                        self.state[pix_id, :] = self.color_palette[i]
                     elif hex_map:
                         # hex_map[pix_id].change_color(self.color_palette[i])
                         self.state[pix_id, :] = self.color_palette[i]
@@ -85,7 +86,7 @@ class Expanse:
             bin.difference_update(move_to_next_bin)
             self.color_bins[(i + 1) % num_bins].update(move_to_next_bin)
 
-        return self.state
+        return self.state.astype(int)
 
         # self.spread_likelihood = ((self.spread_likelihood + 1) % self.spread_likelihood) + 6
 

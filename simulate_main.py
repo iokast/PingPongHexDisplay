@@ -83,12 +83,13 @@ class CyclicInteger:
 class ExampleHexMap:
     def __init__(self, size=(800, 800), hex_radius=20, caption="ExampleHexMap"):
         self.orient = True  # True => flat top hexes
+        self.color_palette = list((np.asarray(color_palette_11[9])).astype(int))
 
-        self.brightness = .5
-        self.color_palette = list((np.asarray(color_palette_11[9])*self.brightness).astype(int))
-        
-        self.expanse = Expanse(self.color_palette)
-        self.clock_animation = Clock([100, 100, 100])
+        self.alpha_bg = .5
+        self.alpha_cl = .4
+
+        self.expanse = Expanse(self.color_palette, self.alpha_bg)
+        self.clock_animation = Clock([255, 255, 255], self.alpha_cl)
         self.time_disp = TimeDisp()
         self.time_mat = self.time_disp.update_time_mat()
 
