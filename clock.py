@@ -9,9 +9,9 @@ class Clock:
     def __init__(self, color, alpha):
         self.alpha = alpha
         self.set_palette(color)
-        self.clock_digits = np.array(clock_positions_slant[:4])
-        self.clock_colon = np.array(clock_positions_slant[4])
-        self.digits = digits_slant
+        self.clock_digits = np.array(clock_positions[:4])
+        self.clock_colon = np.array(clock_positions[4])
+        self.digits = digits
 
         self.color_bins = {}
         for i in range(len(self.color)):

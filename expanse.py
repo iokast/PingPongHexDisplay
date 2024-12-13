@@ -55,7 +55,7 @@ class Expanse:
                     bin.remove(seed_pixel)
                     if strip:
                         # strip.set_pixel_color(seed_pixel, self.color_palette_bit[i])
-                        self.state[seed_pixel :] = self.color_palette[i]
+                        self.state[seed_pixel, :] = self.color_palette[i]
                     elif hex_map:
                         # hex_map[seed_pixel].change_color(self.color_palette[i])
                         self.state[seed_pixel, :] = self.color_palette[i]
