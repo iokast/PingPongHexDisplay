@@ -83,7 +83,7 @@ class CyclicInteger:
 class ExampleHexMap:
     def __init__(self, size=(800, 800), hex_radius=20, caption="ExampleHexMap"):
         self.orient = True  # True => flat top hexes
-        self.color_palette = list((np.asarray(color_palette_11[9])).astype(int))
+        self.color_palette = list((np.asarray(color_palette_11[0])).astype(int))
 
         self.alpha_bg = .5
         self.alpha_cl = .4

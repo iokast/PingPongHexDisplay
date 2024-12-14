@@ -39,7 +39,8 @@ class Display():
 
         state_24bit = ((state[:, 1] << 16) | (state[:, 0] << 8) | state[:, 2]).tolist()
 
-        self.strip.set_pixel_colors(state_24bit)
+        for pix_id, color in enumerate(state_24bit):
+            self.strip.set_pixel_color(pix_id, color)
 
         self.strip.refresh_display()
 
