@@ -7,7 +7,7 @@ os.chdir(dname)
 # libraries
 from hex_mask import color_palette_11, gamma_adj
 import time
-from led_strip_cy import LedStrip
+from led_strip import LedStrip
 from expanse import Expanse
 from clock import Clock
 import numpy as np

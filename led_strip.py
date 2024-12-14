@@ -1,6 +1,4 @@
 import _rpi_ws281x as ws
-import numpy as np
-from numba import njit
 
 class LedStrip:
     def __init__(self):
@@ -42,39 +40,17 @@ class LedStrip:
         self.brightness = LED_BRIGHTNESS
         self.led_count = LED_COUNT
 
-    @staticmethod
-    @njit
-    def _set_all_pixels(channel, colors):
-        """
-        Update the color of all pixels efficiently using Numba.
-
-        Args:
-            channel: The channel object from _rpi_ws281x.
-            colors: A 1D numpy array of np.uint32, where each element is a color.
-        """
-        for pixel_id in range(len(colors)):
-            ws.ws2811_led_set(channel, pixel_id, colors[pixel_id])
-
-    def set_pixel_colors(self, colors):
-        """
-        Updates all pixel colors at once.
-
-        Args:
-            colors: A 1D numpy array of np.uint32 values, where each element is a color.
-        """
-        if len(colors) != self.led_count:
-            raise ValueError("Length of colors array must match the number of LEDs.")
-
-        self._set_all_pixels(self.channel, colors)
+    def set_pixel_color(self, pixel_id, color32):
+        ws.ws2811_led_set(self.channel, pixel_id, color32)
 
     def refresh_display(self):
-        resp = ws.ws2811_render(self.leds)
-        if resp != ws.WS2811_SUCCESS:
-            message = ws.ws2811_get_return_t_str(resp)
-            raise RuntimeError('ws2811_render failed with code {0} ({1})'.format(resp, message))
+            resp = ws.ws2811_render(self.leds)
+            if resp != ws.WS2811_SUCCESS:
+                message = ws.ws2811_get_return_t_str(resp)
+                raise RuntimeError('ws2811_render failed with code {0} ({1})'.format(resp, message))
 
     def change_brightness(self, incr):
-        self.brightness = max(0, min(self.brightness + incr, 255))
+        self.brightness = max(0, min(self.brightness + incr,255))
         ws.ws2811_channel_t_brightness_set(self.channel, self.brightness)
         resp = ws.ws2811_init(self.leds)
         if resp != ws.WS2811_SUCCESS:
@@ -89,4 +65,4 @@ class LedStrip:
             message = ws.ws2811_get_return_t_str(resp)
             raise RuntimeError('ws2811_render failed with code {0} ({1})'.format(resp, message))
         ws.ws2811_fini(self.leds)
-        ws.delete_ws2811_t(self.leds)
+        ws.delete_ws2811_t(self.leds)   
