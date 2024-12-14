@@ -45,7 +45,7 @@ class Expanse:
 
             # Handle seed pixel movement to the next bin
             if bin_lengths[i] > 0 and bin_lengths[(i + 1) % num_bins] < 20:
-                seed_pixels = random.sample(bin, min(seed_count, bin_lengths[i]))
+                seed_pixels = random.sample(list(bin), min(seed_count, bin_lengths[i]))
                 isolated_pixels = {
                     p for p in seed_pixels
                     if all(adj_id in bin for adj_id in led_adj_dict.get(p, []))
