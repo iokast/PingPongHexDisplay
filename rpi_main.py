@@ -50,16 +50,20 @@ class Display():
 
 if __name__ == '__main__':
     colors_id = 0
-    num_loops = 30
+    num_loops_to_update_fps = 30
     
     display = Display(colors_id)
     
     try:
+        t0 = time.time()
+        frame_count = 0
         while True:
-            t0 = time.time()
-            for _ in range(num_loops):
-                display.update()
-            print("FPS = ", round(num_loops / (time.time() - t0), 2), end='\r')
+            display.update()
+            frame_count += 1
+            if frame_count == num_loops_to_update_fps:
+                print("FPS = ", round(frame_count / (time.time() - t0), 2), end='\r')
+                t0 = time.time
+                frame_count = 0
 
     except KeyboardInterrupt:
         display.turn_off()
