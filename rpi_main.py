@@ -18,14 +18,14 @@ class Display():
         self.strip = LedStrip()
 
         # Setup initial parameters
-        self.alpha_background = .1
-        self.alpha_clock = .3
-        self.num_of_loops = 30
+        self.brightness_background = .1
+        self.brightness_clock = .3
+        self.colors_id = colors_id
         self.colors = self.adjust_gamma(color_palette_11[colors_id])
 
         # setup animations
-        self.expanse = Expanse(color_palette=self.colors, alpha=self.alpha_background)
-        self.clock = Clock([255,255,255], alpha=self.alpha_clock)
+        self.expanse = Expanse(color_palette=self.colors, alpha=self.brightness_background)
+        self.clock = Clock([255,255,255], alpha=self.brightness_clock)
 
     # adjust gamma in colors
     def adjust_gamma(self, color_palette):
@@ -51,14 +51,21 @@ class Display():
 if __name__ == '__main__':
     colors_id = 0
     num_loops_to_update_fps = 30
+    ms_between_frames = 30
     
     display = Display(colors_id)
     
     try:
         t0 = time.time()
+        previous_time = time.time()
         frame_count = 0
         while True:
             display.update()
+
+            elapsed = time.time() - previous_time
+            time.sleep(max(0, (ms_between_frames / 1000.0) - elapsed))
+            previous_time = time.time()
+
             frame_count += 1
             if frame_count == num_loops_to_update_fps:
                 print("FPS = ", round(frame_count / (time.time() - t0), 2), end='\r')
