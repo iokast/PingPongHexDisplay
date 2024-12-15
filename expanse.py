@@ -20,10 +20,16 @@ class Expanse:
     def set_palette(self, color_palette):
         # cp_arr = np.asarray(color_palette)
         # cp_arr = np.column_stack((cp_arr, np.full(cp_arr.shape[0])))
+        self.original_palette = color_palette
         self.color_palette = (np.asarray(color_palette) * self.alpha).astype(int)
+
         # self.color_palette_bit = []
         # for c in color_palette:
         #     self.color_palette_bit.append((int(c[3]) << 24) (int(c[1]) << 16) + (int(c[0]) << 8) + int(c[2]))
+
+    def set_brightness(self, brightness):
+        self.alpha = brightness
+        self.color_palette = (np.asarray(self.original_palette) * self.alpha).astype(int)
 
     def update(self, strip=None, hex_map=None):
         num_bins = len(self.color_bins)

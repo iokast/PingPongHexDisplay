@@ -8,6 +8,7 @@ from datetime import datetime
 class Clock:
     def __init__(self, color, alpha):
         self.alpha = alpha
+        self.original_color = color
         self.set_palette(color)
         self.clock_digits = np.array(clock_positions[:4])
         self.clock_colon = np.array(clock_positions[4])
@@ -23,10 +24,15 @@ class Clock:
         self.spread_likelihood = 8
         
     def set_palette(self, color):
+        self.original_color = color
         self.color = (np.asarray(color) * self.alpha).astype(int)
         # self.color_bit = (int(self.color[1]) << 16) + (int(self.color[0]) << 8) + int(self.color[2])
         # self.off  = [0,0,0]
         # self.off_bit = (int(self.off[1]) << 16) + (int(self.off[0]) << 8) + int(self.off[2])
+
+    def set_brightness(self, brightness):
+        self.alpha = brightness
+        self.color = (np.asarray(self.original_color) * self.alpha).astype(int)
 
     def update(self, strip=None, hex_map=None):
         

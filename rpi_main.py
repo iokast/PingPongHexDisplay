@@ -34,6 +34,14 @@ class Display():
 
     def adjust_gamma(self, color_palette):
         return [[gamma_adj[value] for value in row] for row in color_palette]
+    
+    def set_brightness(self, background=None, clock=None):
+        if background:
+            self.brightness_background = background
+            self.expanse.set_brightness(self.brightness_background)
+        elif clock: 
+            self.brightness_clock = clock
+            self.clock.set_brightness(self.brightness_clock)
 
     def update(self):
         state = self.expanse.update(self.strip)
@@ -59,12 +67,10 @@ def set_params():
     data = request.json
     print(data)
     if "brightness_background" in data:
-        display.brightness_background = float(data["brightness_background"])/10
-        display.expanse.alpha = display.brightness_background
+        display.set_brightness(background=float(data["brightness_background"])/10)
 
     if "brightness_clock" in data:
-        display.brightness_clock = float(data["brightness_clock"])/10
-        display.clock.alpha = display.brightness_clock
+        display.set_brightness(clock=float(data["brightness_background"])/10)
 
     if "colors_id" in data:
         display.colors_id = int(data["colors_id"])
@@ -78,7 +84,7 @@ def set_params():
 
 @app.route('/turn_off', methods=['POST'])
 def turn_off():
-    display.turn_off()
+    # display.turn_off()
     return jsonify({"status": "LEDs turned off"})
 
 @app.route('/run', methods=['POST'])
