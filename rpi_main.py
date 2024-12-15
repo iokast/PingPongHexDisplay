@@ -62,7 +62,7 @@ if __name__ == '__main__':
             frame_count += 1
             if frame_count == num_loops_to_update_fps:
                 print("FPS = ", round(frame_count / (time.time() - t0), 2), end='\r')
-                t0 = time.time
+                t0 = time.time()
                 frame_count = 0
 
     except KeyboardInterrupt:
