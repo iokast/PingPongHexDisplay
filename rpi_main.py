@@ -73,17 +73,20 @@ def animation_loop():
 
     while not stop_thread:
         if display is not None:
-            display.update()
+            try:
+                display.update()
 
-            elapsed = time.time() - previous_time
-            time.sleep(max(0, (display.ms_between_frames / 1000.0) - elapsed))
-            previous_time = time.time()
+                elapsed = time.time() - previous_time
+                time.sleep(max(0, (display.ms_between_frames / 1000.0) - elapsed))
+                previous_time = time.time()
 
-            frame_count += 1
-            if frame_count == num_loops_to_update_fps:
-                print("FPS = ", round(frame_count / (time.time() - t0), 2), end='\r')
-                t0 = time.time()
-                frame_count = 0
+                frame_count += 1
+                if frame_count == num_loops_to_update_fps:
+                    print("FPS = ", round(frame_count / (time.time() - t0), 2), end='\r')
+                    t0 = time.time()
+                    frame_count = 0
+            except:
+                display.turn_off()
 
 @app.route('/set_params', methods=['POST'])
 def set_params():
@@ -109,25 +112,23 @@ def change_colors():
         display.expanse.set_palette(display.colors)
     return jsonify({"status": "colors updated"})
 
-@app.route('/turn_off', methods=['POST'])
-def turn_off():
+@app.route('/turn_on_off', methods=['POST'])
+def turn_on_off():
     global stop_thread, thread, display
-    stop_thread = True
-    if thread and thread.is_alive():
-        thread.join()  # Wait for the thread to finish safely
-    if display is not None:
-        display.turn_off()
-    return jsonify({"status": "LEDs turned off"})
-
-@app.route('/turn_on', methods=['POST'])
-def turn_on():
-    global stop_thread, thread, display
-    if display is None:
-        display = Display(colors_id=0)  # Reinitialize the Display object safely
-    stop_thread = False
-    thread = threading.Thread(target=animation_loop, daemon=True)
-    thread.start()  # Start the animation loop
-    return jsonify({"status": "LEDs turned on and animation started"})
+    if stop_thread == False:
+        stop_thread = True
+        if thread and thread.is_alive():
+            thread.join()  # Wait for the thread to finish safely
+        if display is not None:
+            display.turn_off()
+        return jsonify({"status": "LEDs turned off"})
+    if stop_thread == True:
+        if display is None:
+            display = Display(colors_id=0)  # Reinitialize the Display object safely
+        stop_thread = False
+        thread = threading.Thread(target=animation_loop, daemon=True)
+        thread.start()  # Start the animation loop
+        return jsonify({"status": "LEDs turned on and animation started"})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
