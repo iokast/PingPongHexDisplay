@@ -106,7 +106,7 @@ def change_colors():
     if display is not None:
         display.colors_id = (display.colors_id + 1) % len(color_palette_11)
         display.colors = display.adjust_gamma(color_palette_11[display.colors_id])
-        display.expanse.color_palette = display.colors
+        display.expanse.set_palette(display.colors)
     return jsonify({"status": "colors updated"})
 
 @app.route('/turn_off', methods=['POST'])
@@ -114,7 +114,7 @@ def turn_off():
     global stop_thread, thread, display
     stop_thread = True
     if thread and thread.is_alive():
-        thread.join()
+        thread.join()  # Wait for the thread to finish safely
     if display is not None:
         display.turn_off()
     return jsonify({"status": "LEDs turned off"})
@@ -123,10 +123,10 @@ def turn_off():
 def turn_on():
     global stop_thread, thread, display
     if display is None:
-        display = Display(colors_id=0)  # Default initialization
+        display = Display(colors_id=0)  # Reinitialize the Display object safely
     stop_thread = False
     thread = threading.Thread(target=animation_loop, daemon=True)
-    thread.start()
+    thread.start()  # Start the animation loop
     return jsonify({"status": "LEDs turned on and animation started"})
 
 if __name__ == '__main__':

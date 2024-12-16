@@ -64,5 +64,3 @@ class LedStrip:
         if resp != ws.WS2811_SUCCESS:
             message = ws.ws2811_get_return_t_str(resp)
             raise RuntimeError('ws2811_render failed with code {0} ({1})'.format(resp, message))
-        ws.ws2811_fini(self.leds)
-        ws.delete_ws2811_t(self.leds)   
