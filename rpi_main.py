@@ -79,9 +79,10 @@ def set_params():
 
 @app.route('/change_colors', methods=['POST'])
 def change_colors():
-    display.colors_id += 1 % len(color_palette_11)
+    display.colors_id = (display.colors_id + 1) % len(color_palette_11)
     display.colors = display.adjust_gamma(color_palette_11[display.colors_id])
     display.expanse.set_palette(display.colors)
+    return jsonify({"status": "colors updated"})
 
 @app.route('/turn_off', methods=['POST'])
 def turn_off():
