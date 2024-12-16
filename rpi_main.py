@@ -67,18 +67,18 @@ def set_params():
     data = request.json
     print(data)
     if "brightness_background" in data:
-        display.set_brightness(background=float(data["brightness_background"])/10)
+        display.set_brightness(background=float(data["brightness_background"])/100)
 
     if "brightness_clock" in data:
-        display.set_brightness(clock=float(data["brightness_background"])/10)
+        display.set_brightness(clock=float(data["brightness_clock"])/100)
 
     if "colors_id" in data:
         display.colors_id = int(data["colors_id"])
         display.colors = display.adjust_gamma(color_palette_11[display.colors_id])
-        display.expanse.color_palette = display.colors
+        display.expanse.set_palette(display.colors)
 
-    if "ms_between_frames" in data:
-        display.ms_between_frames = int(data["ms_between_frames"])
+    if "fps" in data:
+        display.ms_between_frames = int(1000/float(data["fps"]))
 
     return jsonify({"status": "parameters updated"})
 
