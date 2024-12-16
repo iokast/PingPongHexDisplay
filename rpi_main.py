@@ -72,19 +72,20 @@ def set_params():
     if "brightness_clock" in data:
         display.set_brightness(clock=float(data["brightness_clock"])/100)
 
-    if "colors_id" in data:
-        display.colors_id = int(data["colors_id"])
-        display.colors = display.adjust_gamma(color_palette_11[display.colors_id])
-        display.expanse.set_palette(display.colors)
-
     if "fps" in data:
         display.ms_between_frames = int(1000/float(data["fps"]))
 
     return jsonify({"status": "parameters updated"})
 
+@app.route('/change_colors', methods=['POST'])
+def change_colors():
+    display.colors_id += 1 % len(color_palette_11)
+    display.colors = display.adjust_gamma(color_palette_11[display.colors_id])
+    display.expanse.set_palette(display.colors)
+
 @app.route('/turn_off', methods=['POST'])
 def turn_off():
-    # display.turn_off()
+    display.turn_off()
     return jsonify({"status": "LEDs turned off"})
 
 @app.route('/run', methods=['POST'])
