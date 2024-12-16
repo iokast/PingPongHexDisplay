@@ -12,6 +12,7 @@ from expanse import Expanse
 from clock import Clock
 import numpy as np
 import time
+import threading
 
 # Flask app
 app = Flask(__name__)
@@ -34,12 +35,12 @@ class Display():
 
     def adjust_gamma(self, color_palette):
         return [[gamma_adj[value] for value in row] for row in color_palette]
-    
+
     def set_brightness(self, background=None, clock=None):
-        if background:
+        if background is not None:
             self.brightness_background = background
             self.expanse.set_brightness(self.brightness_background)
-        elif clock: 
+        if clock is not None:
             self.brightness_clock = clock
             self.clock.set_brightness(self.brightness_clock)
 
@@ -58,46 +59,20 @@ class Display():
     def turn_off(self):
         self.strip.turn_off()
 
-# Initialize display
-display = Display(colors_id=0)
+# Global variables
+display = None
+stop_thread = True  # Control flag for the animation loop
+thread = None
 
-@app.route('/set_params', methods=['POST'])
-def set_params():
-    # Parse JSON data
-    data = request.json
-    print(data)
-    if "brightness_background" in data:
-        display.set_brightness(background=float(data["brightness_background"])/100)
-
-    if "brightness_clock" in data:
-        display.set_brightness(clock=float(data["brightness_clock"])/100)
-
-    if "fps" in data:
-        display.ms_between_frames = int(1000/float(data["fps"]))
-
-    return jsonify({"status": "parameters updated"})
-
-@app.route('/change_colors', methods=['POST'])
-def change_colors():
-    display.colors_id = (display.colors_id + 1) % len(color_palette_11)
-    display.colors = display.adjust_gamma(color_palette_11[display.colors_id])
-    display.expanse.set_palette(display.colors)
-    return jsonify({"status": "colors updated"})
-
-@app.route('/turn_off', methods=['POST'])
-def turn_off():
-    display.turn_off()
-    return jsonify({"status": "LEDs turned off"})
-
-@app.route('/run', methods=['POST'])
-def run():
+def animation_loop():
+    global stop_thread, display
+    frame_count = 0
     num_loops_to_update_fps = 30
     t0 = time.time()
     previous_time = time.time()
-    frame_count = 0
 
-    while True:
-        try:
+    while not stop_thread:
+        if display is not None:
             display.update()
 
             elapsed = time.time() - previous_time
@@ -109,9 +84,50 @@ def run():
                 print("FPS = ", round(frame_count / (time.time() - t0), 2), end='\r')
                 t0 = time.time()
                 frame_count = 0
-        except KeyboardInterrupt:
-            display.turn_off()
-            break
+
+@app.route('/set_params', methods=['POST'])
+def set_params():
+    global display
+    # Parse JSON data
+    data = request.json
+    if display is not None:
+        if "brightness_background" in data:
+            display.set_brightness(background=float(data["brightness_background"]) / 100)
+        if "brightness_clock" in data:
+            display.set_brightness(clock=float(data["brightness_clock"]) / 100)
+        if "fps" in data:
+            display.ms_between_frames = int(1000 / float(data["fps"]))
+
+    return jsonify({"status": "parameters updated"})
+
+@app.route('/change_colors', methods=['POST'])
+def change_colors():
+    global display
+    if display is not None:
+        display.colors_id = (display.colors_id + 1) % len(color_palette_11)
+        display.colors = display.adjust_gamma(color_palette_11[display.colors_id])
+        display.expanse.color_palette = display.colors
+    return jsonify({"status": "colors updated"})
+
+@app.route('/turn_off', methods=['POST'])
+def turn_off():
+    global stop_thread, thread, display
+    stop_thread = True
+    if thread and thread.is_alive():
+        thread.join()
+    if display is not None:
+        display.turn_off()
+    return jsonify({"status": "LEDs turned off"})
+
+@app.route('/turn_on', methods=['POST'])
+def turn_on():
+    global stop_thread, thread, display
+    if display is None:
+        display = Display(colors_id=0)  # Default initialization
+    stop_thread = False
+    thread = threading.Thread(target=animation_loop, daemon=True)
+    thread.start()
+    return jsonify({"status": "LEDs turned on and animation started"})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
