@@ -10,8 +10,10 @@ class Clock:
         self.alpha = alpha
         self.original_color = color
         self.set_palette(color)
-        self.clock_digits = np.array(clock_positions[:4])
-        self.clock_colon = np.array(clock_positions[4])
+        self.clock_loc_4 = np.array(clock_positions[4][:4])
+        self.clock_colon_4 = np.array(clock_positions[4][4])
+        self.clock_loc_3 = np.array(clock_positions[3][:3])
+        self.clock_colon_3 = np.array(clock_positions[3][3])
         self.digits = digits
 
         self.color_bins = {}
@@ -41,9 +43,17 @@ class Clock:
         now = datetime.now()
         current_time = str(now.strftime("%I%M"))
         
-        for i in range(4):
+        if int(current_time[0]) == 0:
+            clock_loc = self.clock_loc_3
+            clock_colon = self.clock_colon_3
+            current_time = current_time[1:]
+        else:
+            clock_loc = self.clock_loc_4
+            clock_colon = self.clock_colon_4
+
+        for i in range(len(clock_loc)):
             mask = self.digits[int(current_time[i])]
-            on_pix = list(np.where(mask, self.clock_digits[i], None))
+            on_pix = list(np.where(mask, clock_loc[i], None))
             on_pix = [x for x in on_pix if x is not None]
 
             for pix_id in list(on_pix):
@@ -53,7 +63,7 @@ class Clock:
                 elif hex_map:
                     # hex_map[pix_id].change_color(self.color)
                     state[pix_id, :] = state[pix_id, :] + self.color
-        for pix_id in self.clock_colon:
+        for pix_id in clock_colon:
             if strip:
                 # strip.set_pixel_color(pix_id, self.color_bit)
                 state[pix_id, :] = state[pix_id, :] + self.color
