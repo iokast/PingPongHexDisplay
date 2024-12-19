@@ -44,6 +44,9 @@ class Display():
             self.brightness_clock = clock
             self.clock.set_brightness(self.brightness_clock)
 
+    def change_clock_type(self):
+        self.clock.change_type()
+
     def update(self):
         state = self.expanse.update(self.strip)
         state = state + self.clock.update(self.strip)
@@ -111,6 +114,13 @@ def change_colors():
         display.colors = display.adjust_gamma(color_palette_11[display.colors_id])
         display.expanse.set_palette(display.colors)
     return jsonify({"status": "colors updated"})
+
+@app.route('/change_clock_type', methods=['POST'])
+def change_clock_type():
+    global display
+    if display is not None:
+        display.change_clock_type()
+    return jsonify({"status": "clock type updated"})
 
 @app.route('/turn_on_off', methods=['POST'])
 def turn_on_off():
