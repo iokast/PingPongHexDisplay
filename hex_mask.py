@@ -48,10 +48,10 @@ hex_mask = [
 [None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,396,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,],]
 
 
-digits = np.array([ [[],[],[],[],[],[],[],[],[],[]], # clock off
+digits = [np.array([[],[],[],[],[],[],[],[],[],[]]), # clock off
     
                     # straight small
-                   [[1, 1, 1, # 0
+          np.array([[1, 1, 1, # 0
                      1, 0, 1,
                      1, 0, 1,
                      1, 0, 1,
@@ -109,10 +109,10 @@ digits = np.array([ [[],[],[],[],[],[],[],[],[],[]], # clock off
                      1, 0, 1,
                      0, 1, 1,
                      1, 0, 1,
-                     0, 1, 0]],
+                     0, 1, 0]]),
                      
                      # slant small
-                     [[1, 1, 1,
+            np.array([[1, 1, 1,
                      1, 0, 1,
                      1, 0, 1,
                      1, 0, 1,
@@ -170,10 +170,10 @@ digits = np.array([ [[],[],[],[],[],[],[],[],[],[]], # clock off
                      1, 0, 1,
                      1, 1, 1,
                      0, 0, 1,
-                     1, 1, 1]],
+                     1, 1, 1]]),
 
                     # slant large 
-                    [[1,1,1,1,0,
+          np.array([[1,1,1,1,0,
                     1,1,0,1,1,
                     1,1,0,1,1,
                     1,1,0,1,1,
@@ -251,7 +251,7 @@ digits = np.array([ [[],[],[],[],[],[],[],[],[],[]], # clock off
                     0,1,1,1,0,
                     1,1,0,1,1,
                     1,1,0,1,1,
-                    0,1,1,1,1]]])
+                    0,1,1,1,1]])]
 
 clock_positions = [{4:     [[],[],[],[],[]],    # clock off  
                     3:    [[],[],[],[]]},
