@@ -153,14 +153,12 @@ class ExampleHexMap:
                 self.color_bins[i] = set()
 
     def update_sim(self):
-        state = self.expanse.update(hex_map=self.hex_map)
-        state = state + self.clock_animation.update(hex_map=self.hex_map)
-        
+        state = np.zeros((397,3), dtype=int)
+        state = self.expanse.update(state)
+        state = self.clock_animation.update(state)
         state = np.clip(state, 0, 255)
         
         for pix_id, color in enumerate(state):
-            if pix_id == 42:
-                x = 1
             self.hex_map[pix_id].change_color(color)
 
     def init_pg(self):

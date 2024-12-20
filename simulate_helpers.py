@@ -48,6 +48,8 @@ def make_hex_surface(color, radius, border_color=(100, 100, 100), border=True, h
     center = surf_size / 2
     surface = pg.Surface(surf_size)
     surface.set_colorkey((0, 0, 0))
+    if np.array_equal(color, np.array([0,0,0])):
+        color = np.array([1,1,1])
 
     # Set alpha if color has 4th coordinate.
     if len(color) >= 4:
@@ -100,7 +102,7 @@ class ExampleHex(hx.HexTile):
         return self.position[0]
 
     def change_color(self, color):
-        new_color = np.array(color) # * (1 - alpha) + np.array(self.rgb2) * alpha
+        new_color = np.array(color)
         self.color = new_color.astype(int)
         self.image = make_hex_surface(self.color, self.radius)
 
