@@ -47,9 +47,14 @@ class Display():
     def change_clock_type(self):
         self.clock.change_type()
 
+    def change_clock_color_type(self):
+        self.clock.change_color_type()
+
     def update(self):
-        state = self.expanse.update(self.strip)
-        state = state + self.clock.update(self.strip)
+        state = np.zeros((397,3), dtype=int)
+        state = self.expanse.update(state)
+        state = self.clock.update(state)
+        
         state = np.clip(state, 0, 255)
 
         state_24bit = ((state[:, 1] << 16) | (state[:, 0] << 8) | state[:, 2]).tolist()
@@ -121,6 +126,13 @@ def change_clock_type():
     if display is not None:
         display.change_clock_type()
     return jsonify({"status": "clock type updated"})
+
+@app.route('/change_clock_color_type', methods=['POST'])
+def change_clock_color_type():
+    global display
+    if display is not None:
+        display.change_clock_color_type()
+    return jsonify({"status": "clock color type updated"})
 
 @app.route('/turn_on_off', methods=['POST'])
 def turn_on_off():

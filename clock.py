@@ -11,10 +11,11 @@ class Clock:
         self.original_color = color
         self.set_palette(color)
 
-        self.clock_type = 1
+        self.clock_type = 3
         self.clock_locs_dict = clock_positions[self.clock_type]
         self.number_of_digits = 3
         self.digits = digits[self.clock_type]
+        self.color_type = [0, 3] # [current type, total types]
 
         self.current_direction = 2  # Start moving in the 4 o'clock direction
 
@@ -48,6 +49,22 @@ class Clock:
         self.clock_type = (self.clock_type + 1) % len(clock_positions)
         self.clock_locs_dict = clock_positions[self.clock_type]
         self.digits = digits[self.clock_type]
+
+    def get_color(self, curr_color):        
+        # additive
+        if self.color_type[0] == 0:
+            return curr_color + self.color
+
+        # solid
+        if self.color_type[0] == 1:
+            return self.color
+        
+        # negative
+        if self.color_type[0] == 2:
+            return (np.array([255,255,255]) - curr_color) * self.alpha
+    
+    def change_color_type(self):
+        self.color_type[0] = (self.color_type[0] + 1) % self.color_type[1]
 
     def can_move(self, direction):
         """
@@ -102,10 +119,7 @@ class Clock:
             new_clock_colon.append(new_pixel)
         self.clock_colon_dict[self.number_of_digits][self.number_of_digits] = new_clock_colon        
 
-    def update(self, strip=None, hex_map=None):
-        
-        state = np.zeros((397,3), dtype=int)
-
+    def update(self, state):
         now = datetime.now()
         current_time = str(now.strftime("%I%M"))
         
@@ -118,19 +132,60 @@ class Clock:
         # self.move_clock()
 
         clock_loc = self.clock_locs_dict[self.number_of_digits][:self.number_of_digits]
+        
+        # draw digits
         for i in range(len(clock_loc)):
             mask = self.digits[int(current_time[i])]
             on_pix = list(np.where(mask, clock_loc[i], None))
             on_pix = [x for x in on_pix if x is not None]
 
             for pix_id in list(on_pix):
-                if strip:
-                    # strip.set_pixel_color(pix_id, self.color_bit)
-                    state[pix_id, :] = state[pix_id, :] + self.color
-                elif hex_map:
-                    # hex_map[pix_id].change_color(self.color)
-                    state[pix_id, :] = state[pix_id, :] + self.color
+                state[pix_id, :] = self.get_color(state[pix_id, :])
+        # draw colon
         for pix_id in self.clock_locs_dict[self.number_of_digits][self.number_of_digits]:
+            state[pix_id, :] = self.get_color(state[pix_id, :])
+
+        return state.astype(int)
+    
+    def update_2(self, strip=None, hex_map=None):
+        
+        state = np.zeros((397,3), dtype=int)
+
+        now = datetime.now()
+        current_time = str(now.strftime("%I%M%S"))
+        
+        hours = int(now.strftime("%I"))
+        minutes = int(now.strftime("%M"))
+        seconds = int(now.strftime("%S"))
+        
+        if int(current_time[0]) == 0:
+            self.number_of_digits = 3
+            current_time = current_time[1:]
+        else: 
+            self.number_of_digits = 4
+
+        for pix_id in list(clock_dial):
+            if strip:
+                # strip.set_pixel_color(pix_id, self.color_bit)
+                state[pix_id, :] = state[pix_id, :]  + self.color # - [100,100,100]
+            elif hex_map:
+                # hex_map[pix_id].change_color(self.color)
+                state[pix_id, :] = state[pix_id, :] + self.color # - [100,100,100]
+
+        # for pix_id in self.layers[10][seconds]: # for each ring
+            # tail_len = int(self.tail + self.tail_multiplier * i)
+            # for j in range(0, tail_len): # for each pixel in a segment  TODO: this produces weird colors with tail + i, why?
+            #     j = j % len(self.layers[i])
+            #     k = (j + int(len(self.layers[i])/2)) % len(self.layers[i])
+
+                # # make opposing streamers at pixel j and k
+                # strip.set_pixel_color(self.layers[i][k], self.color)
+            
+            # self.layers[i].append(self.layers[i].pop(0))
+
+        second_hand = int(len(self.layers[10]) * ((seconds + 20) % 60)/60) 
+        pix_id = self.layers[10][second_hand]    
+        for pix_id in [pix_id, pix_id] + led_adjacency[pix_id]:
             if strip:
                 # strip.set_pixel_color(pix_id, self.color_bit)
                 state[pix_id, :] = state[pix_id, :] + self.color
@@ -138,6 +193,28 @@ class Clock:
                 # hex_map[pix_id].change_color(self.color)
                 state[pix_id, :] = state[pix_id, :] + self.color
 
+        minute_hand = int(len(self.layers[6]) * ((minutes + 20) % 60)/60) 
+        pix_id = self.layers[6][minute_hand]    
+        for pix_id in [pix_id, pix_id] + led_adjacency[pix_id]:
+            if strip:
+                # strip.set_pixel_color(pix_id, self.color_bit)
+                state[pix_id, :] = state[pix_id, :] + self.color
+            elif hex_map:
+                # hex_map[pix_id].change_color(self.color)
+                state[pix_id, :] = state[pix_id, :] + self.color
+
+        hour_hand = int(len(self.layers[2]) * ((hours + 4) % 12)/12) 
+        pix_id = self.layers[2][hour_hand]
+        for pix_id in [pix_id, pix_id] + led_adjacency[pix_id]:
+            if strip:
+                # strip.set_pixel_color(pix_id, self.color_bit)
+                state[pix_id, :] = state[pix_id, :] + self.color
+            elif hex_map:
+                # hex_map[pix_id].change_color(self.color)
+                state[pix_id, :] = state[pix_id, :] + self.color
+
+
+                
         return state.astype(int)
         
 
