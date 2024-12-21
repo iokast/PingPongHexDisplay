@@ -43,14 +43,11 @@ class Display():
     def adjust_gamma(self, color_palette):
         return [[gamma_adj[value] for value in row] for row in color_palette]
 
-    def set_color_and_brightness(self, background=None, clock=None):
-        if background is not None:
-            self.brightness_background = background
-            for animation in self.background_animations:
-                animation.set_palette(self.colors, self.brightness_background)
-        if clock is not None:
-            self.brightness_clock = clock
-            self.clock_animations[self.clock_animation_id].set_brightness(self.brightness_clock)
+    def set_color_and_brightness(self):
+        for animation in self.background_animations:
+            animation.set_palette(self.colors, self.brightness_background)
+
+        self.clock_animations[self.clock_animation_id].set_brightness(self.brightness_clock)
 
     def change_clock_type(self):
         self.clock_animations[self.clock_animation_id].change_type()
@@ -113,9 +110,11 @@ def set_params():
     data = request.json
     if display is not None:
         if "brightness_background" in data:
-            display.set_color_and_brightness(background=float(data["brightness_background"]) / 100)
+            display.brightness_background = float(data["brightness_background"]) / 100
         if "brightness_clock" in data:
-            display.set_color_and_brightness(clock=float(data["brightness_clock"]) / 100)
+            display.brightness_clock = float(data["brightness_clock"]) / 100
+        display.set_color_and_brightness()
+
         if "fps" in data:
             display.ms_between_frames = int(1000 / float(data["fps"]))
 
@@ -127,7 +126,7 @@ def change_colors():
     if display is not None:
         display.colors_id = (display.colors_id + 1) % len(color_palette_11)
         display.colors = display.adjust_gamma(color_palette_11[display.colors_id])
-        display.set_color_and_brightness(display.colors, display.brightness_background)
+        display.set_color_and_brightness()
     return jsonify({"status": "colors updated"})
 
 @app.route('/change_clock_type', methods=['POST'])
