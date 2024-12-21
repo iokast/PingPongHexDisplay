@@ -32,7 +32,7 @@ class Display():
 
         # Setup animations
         self.background_animations = [Expanse(color_palette=self.colors, alpha=self.brightness_background),
-                                      Spin(color_palette=self.color_palette, alpha=self.brightness_background)]
+                                      Spin(color_palette=self.colors, alpha=self.brightness_background)]
         self.background_animation_id = 0
         # self.background_animation_current = self.background_animations[self.background_animation_id]
         
