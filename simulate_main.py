@@ -6,6 +6,7 @@ from simulate_helpers import *
 from hex_mask import color_palette_11
 from expanse import Expanse
 from clock import Clock
+from spin import Spin
 
 class Selection:
     class Type:
@@ -88,6 +89,7 @@ class ExampleHexMap:
         self.alpha_bg = .5
         self.alpha_cl = .4
 
+        self.spin = Spin(self.color_palette, self.alpha_bg)
         self.expanse = Expanse(self.color_palette, self.alpha_bg)
         self.clock_animation = Clock([255, 255, 255], self.alpha_cl)
         self.time_disp = TimeDisp()
@@ -154,7 +156,8 @@ class ExampleHexMap:
 
     def update_sim(self):
         state = np.zeros((397,3), dtype=int)
-        state = self.expanse.update(state)
+        # state = self.expanse.update(state)
+        state = self.spin.update(state)
         state = self.clock_animation.update(state)
         state = np.clip(state, 0, 255)
         
@@ -218,30 +221,6 @@ class ExampleHexMap:
     def quit_app(self):
         pg.quit()
         raise SystemExit
-
-def diplay_leds(hex_map_obj):
-    from rpi_ws281x import PixelStrip, Color
-    # LED strip configuration:
-    LED_COUNT = 397        # Number of LED pixels.
-    LED_PIN = 18          # GPIO pin connected to the pixels (18 uses PWM!).
-    # LED_PIN = 10        # GPIO pin connected to the pixels (10 uses SPI /dev/spidev0.0).
-    LED_FREQ_HZ = 800000  # LED signal frequency in hertz (usually 800khz)
-    LED_DMA = 10          # DMA channel to use for generating signal (try 10)
-    LED_BRIGHTNESS = 100  # Set to 0 for darkest and 255 for brightest
-    LED_INVERT = False    # True to invert the signal (when using NPN transistor level shift)
-    LED_CHANNEL = 0       # set to '1' for GPIOs 13, 19, 41, 45 or 53
-
-    strip = PixelStrip(LED_COUNT, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL)
-    strip.begin()
-
-    color = Color(255,0,0)
-    wait_ms = 50 
-    for i, hexagon in enumerate(list(hex_map_obj.hex_map.values())):
-        if hexagon.value:
-            strip.setPixelColor(hexagon.value, color)
-            strip.show()
-            time.sleep(wait_ms / 1000.0)
-
 
 if __name__ == '__main__':    
     example_hex_map = ExampleHexMap()

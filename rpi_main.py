@@ -9,6 +9,7 @@ from hex_mask import color_palette_11, gamma_adj
 from flask import Flask, request, jsonify
 from led_strip import LedStrip
 from expanse import Expanse
+from spin import Spin
 from clock import Clock
 import numpy as np
 import time
@@ -30,31 +31,40 @@ class Display():
         self.ms_between_frames = 30
 
         # Setup animations
-        self.expanse = Expanse(color_palette=self.colors, alpha=self.brightness_background)
-        self.clock = Clock([255, 255, 255], alpha=self.brightness_clock)
+        self.background_animations = [Expanse(color_palette=self.colors, alpha=self.brightness_background),
+                                      Spin(color_palette=self.color_palette, alpha=self.brightness_background)]
+        self.background_animation_id = 0
+        # self.background_animation_current = self.background_animations[self.background_animation_id]
+        
+        self.clock_animations = [Clock([255, 255, 255], alpha=self.brightness_clock)]
+        self.clock_animation_id = 0
+        # self.clock_animation_current = self.clock_animations[self.clock_animation_id]
 
     def adjust_gamma(self, color_palette):
         return [[gamma_adj[value] for value in row] for row in color_palette]
 
-    def set_brightness(self, background=None, clock=None):
+    def set_color_and_brightness(self, background=None, clock=None):
         if background is not None:
             self.brightness_background = background
-            self.expanse.set_brightness(self.brightness_background)
+            for animation in self.background_animations:
+                animation.set_palette(self.colors, self.brightness_background)
         if clock is not None:
             self.brightness_clock = clock
-            self.clock.set_brightness(self.brightness_clock)
+            self.clock_animations[self.clock_animation_id].set_brightness(self.brightness_clock)
 
     def change_clock_type(self):
-        self.clock.change_type()
+        self.clock_animations[self.clock_animation_id].change_type()
+
+    def change_background_type(self):
+        self.background_animation_id = (self.background_animation_id + 1) % len(self.background_animations)
 
     def change_clock_color_type(self):
-        self.clock.change_color_type()
+        self.clock_animations[self.clock_animation_id].change_color_type()
 
     def update(self):
         state = np.zeros((397,3), dtype=int)
-        state = self.expanse.update(state)
-        state = self.clock.update(state)
-        
+        state = self.background_animations[self.background_animation_id].update(state)
+        state = self.clock_animations[self.clock_animation_id].update(state)
         state = np.clip(state, 0, 255)
 
         state_24bit = ((state[:, 1] << 16) | (state[:, 0] << 8) | state[:, 2]).tolist()
@@ -103,9 +113,9 @@ def set_params():
     data = request.json
     if display is not None:
         if "brightness_background" in data:
-            display.set_brightness(background=float(data["brightness_background"]) / 100)
+            display.set_color_and_brightness(background=float(data["brightness_background"]) / 100)
         if "brightness_clock" in data:
-            display.set_brightness(clock=float(data["brightness_clock"]) / 100)
+            display.set_color_and_brightness(clock=float(data["brightness_clock"]) / 100)
         if "fps" in data:
             display.ms_between_frames = int(1000 / float(data["fps"]))
 
@@ -117,7 +127,7 @@ def change_colors():
     if display is not None:
         display.colors_id = (display.colors_id + 1) % len(color_palette_11)
         display.colors = display.adjust_gamma(color_palette_11[display.colors_id])
-        display.expanse.set_palette(display.colors)
+        display.set_color_and_brightness(display.colors, display.brightness_background)
     return jsonify({"status": "colors updated"})
 
 @app.route('/change_clock_type', methods=['POST'])
@@ -126,6 +136,13 @@ def change_clock_type():
     if display is not None:
         display.change_clock_type()
     return jsonify({"status": "clock type updated"})
+
+@app.route('/change_background_type', methods=['POST'])
+def change_background_type():
+    global display
+    if display is not None:
+        display.change_background_type()
+    return jsonify({"status": "background type updated"})
 
 @app.route('/change_clock_color_type', methods=['POST'])
 def change_clock_color_type():

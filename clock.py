@@ -15,7 +15,7 @@ class Clock:
         self.clock_locs_dict = clock_positions[self.clock_type]
         self.number_of_digits = 3
         self.digits = digits[self.clock_type]
-        self.color_type = [2, 3] # [current type, total types]
+        self.color_type = [0, 3] # [current type, total types]
 
         self.current_direction = 2  # Start moving in the 4 o'clock direction
 
@@ -64,7 +64,7 @@ class Clock:
         
         # negative
         if self.color_type[0] == 2:
-            return self.adjust_gamma(((np.array([255,255,255]) - curr_color) * self.alpha).astype(int))
+            return self.adjust_gamma((np.array([255,255,255]) * self.alpha).astype(int)) - curr_color
     
     def change_color_type(self):
         self.color_type[0] = (self.color_type[0] + 1) % self.color_type[1]
