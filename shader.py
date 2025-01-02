@@ -10,9 +10,9 @@ import os
 class Shader:
     def __init__(self, color_palette, alpha):        
         self.shader_files = []
-        for file in os.listdir("PingPongHexDisplay/shaders"):
+        for file in os.listdir("shaders"):
             if file.endswith(".fs"):
-                self.shader_files.append(os.path.join("PingPongHexDisplay/shaders", file))
+                self.shader_files.append(os.path.join("shaders", file))
         
         self.shader_id = 1
 
@@ -34,8 +34,8 @@ class Shader:
         self.gif_coords = gif_coords.astype(int)
 
         # Initialize Pyglet OpenGL context
-        config = Config(double_buffer=True, depth_size=16)
-        self.context = Context(config)
+        # config = Config(double_buffer=True, depth_size=16)
+        # self.context = Context(config)
         #self.initialize_opengl()
 
     def change_shader(self):
@@ -53,6 +53,8 @@ class Shader:
         self.brightness = brightness
     
     def initialize_opengl(self):
+        config = Config(double_buffer=True, depth_size=16)
+        self.context = Context(config)
 
         # Set up OpenGL environment
         glClearColor(0.0, 0.0, 0.0, 1.0)
