@@ -32,6 +32,7 @@ class Display():
         self.colors = color_palette_11[colors_id]
         self.ms_between_frames = 30
         self.is_on = True
+        self.gamma_adj = np.array(gamma_adj)
 
         # Setup animations
         self.background_animations = [Shader(color_palette=self.colors, alpha=self.brightness_background),
@@ -62,7 +63,7 @@ class Display():
         state = self.background_animations[self.background_animation_id].update(state)
         state = self.clock_animations[self.clock_animation_id].update(state)
         state = np.clip(state, 0, 255)
-        state = gamma_adj[state].astype(int)
+        state = self.gamma_adj[state]
 
 
         state_24bit = ((state[:, 1] << 16) | (state[:, 0] << 8) | state[:, 2]).tolist()
