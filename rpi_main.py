@@ -14,6 +14,7 @@ from clock import Clock
 import numpy as np
 import time
 import threading
+from shader import Shader
 
 # Flask app
 app = Flask(__name__)
@@ -31,7 +32,8 @@ class Display():
         self.ms_between_frames = 30
 
         # Setup animations
-        self.background_animations = [Expanse(color_palette=self.colors, alpha=self.brightness_background),
+        self.background_animations = [Shader(color_palette=self.colors, alpha=self.brightness_background),
+                                      Expanse(color_palette=self.colors, alpha=self.brightness_background),
                                       Spin(color_palette=self.colors, alpha=self.brightness_background)]
         self.background_animation_id = 0
         # self.background_animation_current = self.background_animations[self.background_animation_id]
@@ -81,11 +83,12 @@ thread = None
 
 def animation_loop():
     global stop_thread, display
+    display.background_animations[0].initialize_opengl()
     frame_count = 0
     num_loops_to_update_fps = 30
     t0 = time.time()
     previous_time = time.time()
-
+        
     while not stop_thread:
         if display is not None:
             try:
