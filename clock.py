@@ -1,5 +1,5 @@
 import numpy as np
-from hex_mask import clock_positions, digits, led_adjacency, clock_dial, cube_coords, gamma_adj
+from hex_mask import clock_positions, digits, led_adjacency, clock_dial, cube_coords
 import random
 from datetime import datetime
 
@@ -41,9 +41,6 @@ class Clock:
         self.original_color = color
         self.color = (np.asarray(color) * self.alpha).astype(int)
 
-    def adjust_gamma(self, color):
-        return np.array([[gamma_adj[value] for value in color]])
-
     def set_brightness(self, brightness):
         self.alpha = brightness
         self.color = (np.asarray(self.original_color) * self.alpha).astype(int)
@@ -64,7 +61,7 @@ class Clock:
         
         # negative
         if self.color_type[0] == 2:
-            return self.adjust_gamma((np.array([255,255,255]) * self.alpha).astype(int)) - curr_color
+            return ((np.array([255,255,255]) * self.alpha).astype(int)) - curr_color
     
     def change_color_type(self):
         self.color_type[0] = (self.color_type[0] + 1) % self.color_type[1]

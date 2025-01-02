@@ -29,7 +29,7 @@ class Display():
         self.brightness_background = brightness_background
         self.brightness_clock = brightness_clock
         self.colors_id = colors_id
-        self.colors = self.adjust_gamma(color_palette_11[colors_id])
+        self.colors = color_palette_11[colors_id]
         self.ms_between_frames = 30
         self.is_on = True
 
@@ -41,9 +41,6 @@ class Display():
         
         self.clock_animations = [Clock([255, 255, 255], alpha=self.brightness_clock)]
         self.clock_animation_id = 0
-
-    def adjust_gamma(self, color_palette):
-        return [[gamma_adj[value] for value in row] for row in color_palette]
 
     def set_color_and_brightness(self):
         for animation in self.background_animations:
@@ -65,6 +62,8 @@ class Display():
         state = self.background_animations[self.background_animation_id].update(state)
         state = self.clock_animations[self.clock_animation_id].update(state)
         state = np.clip(state, 0, 255)
+        state = gamma_adj[state].astype(int)
+
 
         state_24bit = ((state[:, 1] << 16) | (state[:, 0] << 8) | state[:, 2]).tolist()
 
@@ -102,7 +101,7 @@ def change_colors():
     global command_queue, display
     if display is not None:
         display.colors_id = (display.colors_id + 1) % len(color_palette_11)
-        display.colors = display.adjust_gamma(color_palette_11[display.colors_id])
+        display.colors = color_palette_11[display.colors_id]
         command_queue.put("change_colors")
     return jsonify({"status": "colors updated"})
 
@@ -139,7 +138,7 @@ def process_commands():
         command = command_queue.get()
         if command == "change_colors":
             display.colors_id = (display.colors_id + 1) % len(color_palette_11)
-            display.colors = display.adjust_gamma(color_palette_11[display.colors_id])
+            display.colors = color_palette_11[display.colors_id]
             display.set_color_and_brightness()
         elif command == "change_background_type":
             display.change_background_type()

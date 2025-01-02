@@ -30,13 +30,10 @@ class Spin:
         
         if len(color_palette) >= 11:
             layer_colors_base = deepcopy(color_palette[:11])
-        elif len(color_palette) < 11:
+        else:
             layer_colors_base = deepcopy(color_palette) + [np.array([0, 0, 0])] * (11 - len(color_palette))
 
         layer_colors_base = [[0,0,0]] + layer_colors_base
-        # for i in range(len(layer_colors_base)):
-        #     for j in range(3):
-        #         layer_colors_base[i][j] = gamma_adj[layer_colors_base[i][j]]
 
         self.layer_colors_base = np.array(layer_colors_base).astype(int) * alpha
 
