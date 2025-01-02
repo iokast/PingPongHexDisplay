@@ -1,3 +1,9 @@
+# set working directory
+import os
+abspath = os.path.abspath(__file__)
+dname = os.path.dirname(abspath)
+os.chdir(dname)
+
 import numpy as np
 from OpenGL.GL import *
 from OpenGL.GL.shaders import compileProgram, compileShader
@@ -14,7 +20,7 @@ class Shader:
             if file.endswith(".fs"):
                 self.shader_files.append(os.path.join("shaders", file))
         
-        self.shader_id = 1
+        self.shader_id = 0
 
         with open(self.shader_files[self.shader_id], 'r') as file:
             self.shadertoy_code = file.read()
@@ -190,7 +196,7 @@ if __name__ == "__main__":
     import cv2
     while True:
         frame = sh.generate_frame()
-        frame = gaussian_filter(frame, sigma=(.5,.5,0))
+        frame = gaussian_filter(frame, sigma=(1.5,1.5,0))
 
         # Display the frame using OpenCV
         cv2.imshow('Shader Output', cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))

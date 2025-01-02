@@ -20,8 +20,8 @@ vec3 get_blob(int i, float time){
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {    
     // Shading parameters
-    vec3 blob_color_center = vec3(.8,0,.1); // blue center
-    vec3 blob_color_edge = vec3(0,0,1); // magenta edges
+    vec3 blob_color_center = vec3(0,0,1); // blue center
+    vec3 blob_color_edge = vec3(1,0,1); // magenta edges
     vec3 bg_col = vec3(0, 0, 0)/256.; // background color is light orange  
     int num_blobs = 20;    
     float thresh = 3000.; // determine size of balls  (larger num = smaller balls)
