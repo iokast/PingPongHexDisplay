@@ -132,7 +132,7 @@ def animation_loop():
     try:
         while True:
             process_commands()
-            display.update()
+            if display.is_on: display.update()
 
             elapsed = time.time() - previous_time
             time.sleep(max(0, (display.ms_between_frames / 1000.0) - elapsed))
