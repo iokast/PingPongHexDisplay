@@ -13,7 +13,7 @@ from spin import Spin
 from clock import Clock
 import numpy as np
 import time
-import threading
+from threading import Thread
 from shader import Shader
 
 # Flask app
@@ -30,17 +30,16 @@ class Display():
         self.colors_id = colors_id
         self.colors = self.adjust_gamma(color_palette_11[colors_id])
         self.ms_between_frames = 30
+        self.is_on = True
 
         # Setup animations
         self.background_animations = [Shader(color_palette=self.colors, alpha=self.brightness_background),
                                       Expanse(color_palette=self.colors, alpha=self.brightness_background),
                                       Spin(color_palette=self.colors, alpha=self.brightness_background)]
         self.background_animation_id = 0
-        # self.background_animation_current = self.background_animations[self.background_animation_id]
         
         self.clock_animations = [Clock([255, 255, 255], alpha=self.brightness_clock)]
         self.clock_animation_id = 0
-        # self.clock_animation_current = self.clock_animations[self.clock_animation_id]
 
     def adjust_gamma(self, color_palette):
         return [[gamma_adj[value] for value in row] for row in color_palette]
@@ -61,7 +60,7 @@ class Display():
         self.clock_animations[self.clock_animation_id].change_color_type()
 
     def update(self):
-        state = np.zeros((397,3), dtype=int)
+        state = np.zeros((397, 3), dtype=int)
         state = self.background_animations[self.background_animation_id].update(state)
         state = self.clock_animations[self.clock_animation_id].update(state)
         state = np.clip(state, 0, 255)
@@ -75,41 +74,14 @@ class Display():
 
     def turn_off(self):
         self.strip.turn_off()
+        display.is_on = False
 
-# Global variables
-display = None
-stop_thread = True  # Control flag for the animation loop
-thread = None
-
-def animation_loop():
-    global stop_thread, display
-    display.background_animations[0].initialize_opengl()
-    frame_count = 0
-    num_loops_to_update_fps = 30
-    t0 = time.time()
-    previous_time = time.time()
-        
-    while not stop_thread:
-        if display is not None:
-            try:
-                display.update()
-
-                elapsed = time.time() - previous_time
-                time.sleep(max(0, (display.ms_between_frames / 1000.0) - elapsed))
-                previous_time = time.time()
-
-                frame_count += 1
-                if frame_count == num_loops_to_update_fps:
-                    print("FPS = ", round(frame_count / (time.time() - t0), 2), end='\r')
-                    t0 = time.time()
-                    frame_count = 0
-            except:
-                display.turn_off()
+# Global display object
+display = Display(colors_id=0)
 
 @app.route('/set_params', methods=['POST'])
 def set_params():
     global display
-    # Parse JSON data
     data = request.json
     if display is not None:
         if "brightness_background" in data:
@@ -155,21 +127,43 @@ def change_clock_color_type():
 
 @app.route('/turn_on_off', methods=['POST'])
 def turn_on_off():
-    global stop_thread, thread, display
-    if stop_thread == False:
-        stop_thread = True
-        if thread and thread.is_alive():
-            thread.join()  # Wait for the thread to finish safely
-        if display is not None:
-            display.turn_off()
-        return jsonify({"status": "LEDs turned off"})
-    if stop_thread == True:
-        if display is None:
-            display = Display(colors_id=0)  # Reinitialize the Display object safely
-        stop_thread = False
-        thread = threading.Thread(target=animation_loop, daemon=True)
-        thread.start()  # Start the animation loop
-        return jsonify({"status": "LEDs turned on and animation started"})
+    global display
+    if display.is_on:
+        display.turn_off()
+    else:
+        display.is_on = True
+        
+    return jsonify({"status": "LEDs turned on/off"})
+
+def animation_loop():
+    global display
+    display.background_animations[0].initialize_opengl()
+    frame_count = 0
+    num_loops_to_update_fps = 30
+    t0 = time.time()
+    previous_time = time.time()
+
+    try:
+        while True:
+            if display.is_on: display.update()
+
+            elapsed = time.time() - previous_time
+            time.sleep(max(0, (display.ms_between_frames / 1000.0) - elapsed))
+            previous_time = time.time()
+
+            frame_count += 1
+            if frame_count == num_loops_to_update_fps:
+                print("FPS = ", round(frame_count / (time.time() - t0), 2), end='\r')
+                t0 = time.time()
+                frame_count = 0
+    except KeyboardInterrupt:
+        display.turn_off()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    # Start Flask in a separate thread
+    flask_thread = Thread(target=lambda: app.run(host='0.0.0.0', port=5000), daemon=True)
+    flask_thread.start()
+
+    # Run the main OpenGL animation loop
+    display.background_animations[0].initialize_opengl()
+    animation_loop()
