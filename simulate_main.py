@@ -1,3 +1,9 @@
+# set working directory
+import os
+abspath = os.path.abspath(__file__)
+dname = os.path.dirname(abspath)
+os.chdir(dname)
+
 import numpy as np
 import hexy as hx
 import pygame as pg
@@ -7,6 +13,7 @@ from hex_mask import color_palette_11
 from expanse import Expanse
 from clock import Clock
 from spin import Spin
+from shader import Shader
 
 class Selection:
     class Type:
@@ -86,8 +93,8 @@ class ExampleHexMap:
         self.orient = True  # True => flat top hexes
         self.color_palette = list((np.asarray(color_palette_11[0])).astype(int))
 
-        self.alpha_bg = .5
-        self.alpha_cl = .4
+        self.alpha_bg = .8
+        self.alpha_cl = .2
 
         self.spin = Spin(self.color_palette, self.alpha_bg)
         self.expanse = Expanse(self.color_palette, self.alpha_bg)
@@ -143,9 +150,10 @@ class ExampleHexMap:
         self.clock = None
         self.init_pg()
 
-        # specific to expanse animation
-        self.frontline_ids = set()
-        self.candidate_ids = set()
+        self.shader = Shader(self.color_palette, self.alpha_bg)
+        self.shader.initialize_opengl()
+
+
 
         self.color_bins = {}
         for i in range(len(self.color_palette)):
@@ -157,7 +165,8 @@ class ExampleHexMap:
     def update_sim(self):
         state = np.zeros((397,3), dtype=int)
         # state = self.expanse.update(state)
-        state = self.spin.update(state)
+        # state = self.spin.update(state)
+        state = self.shader.update(state)
         state = self.clock_animation.update(state)
         state = np.clip(state, 0, 255)
         
@@ -181,8 +190,14 @@ class ExampleHexMap:
                 running = False
 
             if event.type == pg.KEYDOWN:
-                if event.key == pg.K_ESCAPE:
+                if event.key == pg.K_ESCAPE or event.key == pg.K_q:
+                    print('escape')
                     running = False
+            
+            if event.type == pg.KEYDOWN: 
+                if event.key == pg.K_UP:
+                    print('change shader')
+                    self.shader.change_shader()
 
         return running
 

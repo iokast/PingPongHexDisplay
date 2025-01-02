@@ -21,7 +21,7 @@ from queue import Queue
 app = Flask(__name__)
 
 class Display():
-    def __init__(self, colors_id, brightness_background=0.1, brightness_clock=0.3):
+    def __init__(self, colors_id, brightness_background=0.4, brightness_clock=0.4):
         # Setup LED Strip
         self.strip = LedStrip()
 
@@ -64,7 +64,6 @@ class Display():
         state = self.clock_animations[self.clock_animation_id].update(state)
         state = np.clip(state, 0, 255)
         state = self.gamma_adj[state]
-
 
         state_24bit = ((state[:, 1] << 16) | (state[:, 0] << 8) | state[:, 2]).tolist()
 

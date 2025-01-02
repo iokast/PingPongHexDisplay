@@ -171,7 +171,7 @@ class Shader:
 
     def update(self, state):
         frame = self.generate_frame()
-        frame = gaussian_filter(frame, sigma=(.5, .5, 0))
+        frame = gaussian_filter(frame, sigma=(1.5, 1.5, 0))
         for pix_id in range(self.gif_coords.shape[0]):
             state[pix_id, :] = frame[self.gif_coords[pix_id, 0], self.gif_coords[pix_id, 1], :]
         return state * self.brightness
