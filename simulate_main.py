@@ -192,12 +192,16 @@ class ExampleHexMap:
             if event.type == pg.KEYDOWN:
                 if event.key == pg.K_ESCAPE or event.key == pg.K_q:
                     print('escape')
-                    running = False
-            
-            if event.type == pg.KEYDOWN: 
+                    running = False 
                 if event.key == pg.K_UP:
                     print('change shader')
                     self.shader.change_shader()
+                if event.key == pg.K_RIGHT:
+                    self.shader.blur_sigma = (self.shader.blur_sigma + .5)
+                    print('change blur sigma: ', self.shader.blur_sigma)
+                if event.key == pg.K_LEFT:
+                    self.shader.blur_sigma = max(0, (self.shader.blur_sigma - .5))
+                    print('change blur sigma: ', self.shader.blur_sigma)
 
         return running
 

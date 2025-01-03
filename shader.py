@@ -15,6 +15,7 @@ import os
 
 class Shader:
     def __init__(self, color_palette, alpha):        
+        self.blur_sigma = 1.0
         self.shader_files = []
         for file in os.listdir("shaders"):
             if file.endswith(".fs"):
@@ -167,11 +168,11 @@ class Shader:
         # Unbind FBO to return to default framebuffer
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
+        pixels = gaussian_filter(pixels, sigma=(self.blur_sigma, self.blur_sigma, 0))
         return pixels
 
     def update(self, state):
         frame = self.generate_frame()
-        frame = gaussian_filter(frame, sigma=(1.5, 1.5, 0))
         for pix_id in range(self.gif_coords.shape[0]):
             state[pix_id, :] = frame[self.gif_coords[pix_id, 0], self.gif_coords[pix_id, 1], :]
         return state * self.brightness
@@ -196,7 +197,6 @@ if __name__ == "__main__":
     import cv2
     while True:
         frame = sh.generate_frame()
-        frame = gaussian_filter(frame, sigma=(1.5,1.5,0))
 
         # Display the frame using OpenCV
         cv2.imshow('Shader Output', cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
