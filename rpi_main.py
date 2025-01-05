@@ -107,9 +107,8 @@ def change_colors():
 
 @app.route('/change_clock_type', methods=['POST'])
 def change_clock_type():
-    global display
-    if display is not None:
-        display.change_clock_type()
+    global command_queue
+    command_queue.put("change_clock_type") 
     return jsonify({"status": "clock type updated"})
 
 @app.route('/change_background_type', methods=['POST'])
