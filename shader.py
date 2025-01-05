@@ -21,6 +21,7 @@ class Shader:
             if file.endswith(".fs"):
                 self.shader_files.append(os.path.join("shaders", file))
         
+        self.shader_files = sorted(self.shader_files)
         self.shader_id = 0
 
         with open(self.shader_files[self.shader_id], 'r') as file:
@@ -47,7 +48,8 @@ class Shader:
 
     def change_shader(self):
         self.shader_id = (self.shader_id + 1) % len(self.shader_files)
-
+        
+        print("Loading shader... ", self.shader_files[self.shader_id])
         with open(self.shader_files[self.shader_id], 'r') as file:
             self.shadertoy_code = file.read()
 
@@ -119,8 +121,8 @@ class Shader:
         
         vertex_shader_obj = compileShader(vertex_shader, GL_VERTEX_SHADER)
         fragment_shader_obj = compileShader(fragment_shader, GL_FRAGMENT_SHADER)
-        print(glGetShaderInfoLog(vertex_shader_obj))  # Debug output for vertex shader
-        print(glGetShaderInfoLog(fragment_shader_obj)) 
+        # print(glGetShaderInfoLog(vertex_shader_obj))  # Debug output for vertex shader
+        # print(glGetShaderInfoLog(fragment_shader_obj)) 
         return compileProgram(vertex_shader_obj, fragment_shader_obj)
 
     def create_buffer(self, shader_program):
