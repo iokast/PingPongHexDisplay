@@ -44,64 +44,64 @@ class Shader:
         )
 
 
-def build_pixel_map(self):
+    def build_pixel_map(self):
 
-    coords = cartesian_coords.astype(float)
+        coords = cartesian_coords.astype(float)
 
-    # cartesian_coords convention:
-    #
-    # coords[:,0] = row / Y
-    # coords[:,1] = column / X
+        # cartesian_coords convention:
+        #
+        # coords[:,0] = row / Y
+        # coords[:,1] = column / X
 
-    center_y = (
-        np.max(coords[:, 0]) +
-        np.min(coords[:, 0])
-    ) / 2.0
+        center_y = (
+            np.max(coords[:, 0]) +
+            np.min(coords[:, 0])
+        ) / 2.0
 
-    center_x = (
-        np.max(coords[:, 1]) +
-        np.min(coords[:, 1])
-    ) / 2.0
+        center_x = (
+            np.max(coords[:, 1]) +
+            np.min(coords[:, 1])
+        ) / 2.0
 
-    coords[:,0] -= center_y
-    coords[:,1] -= center_x
-
-
-    max_extent = max(
-        np.max(np.abs(coords[:,0])),
-        np.max(np.abs(coords[:,1]))
-    )
-
-    padding = 4
-
-    self.canvas_size = int(
-        max_extent * 2 + padding
-    )
+        coords[:,0] -= center_y
+        coords[:,1] -= center_x
 
 
-    # Convert to framebuffer coordinates
-    #
-    # Here we intentionally DO NOT invert Y.
-    # glReadPixels() inversion is handled later
-    # by np.flipud()
-
-    x = (
-        coords[:,1] +
-        self.canvas_size / 2
-    )
-
-    y = (
-        coords[:,0] +
-        self.canvas_size / 2
-    )
-
-
-    self.pixel_map = np.column_stack(
-        (
-            x.astype(int),
-            y.astype(int)
+        max_extent = max(
+            np.max(np.abs(coords[:,0])),
+            np.max(np.abs(coords[:,1]))
         )
-    )
+
+        padding = 4
+
+        self.canvas_size = int(
+            max_extent * 2 + padding
+        )
+
+
+        # Convert to framebuffer coordinates
+        #
+        # Here we intentionally DO NOT invert Y.
+        # glReadPixels() inversion is handled later
+        # by np.flipud()
+
+        x = (
+            coords[:,1] +
+            self.canvas_size / 2
+        )
+
+        y = (
+            coords[:,0] +
+            self.canvas_size / 2
+        )
+
+
+        self.pixel_map = np.column_stack(
+            (
+                x.astype(int),
+                y.astype(int)
+            )
+        )
 
 
     def change_shader(self):
