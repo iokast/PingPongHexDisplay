@@ -10,7 +10,7 @@ import pygame as pg
 from text_for_hex import radial_to_irl_map
 from simulate_helpers import *
 from hex_mask import color_palette_11
-from expanse import Expanse
+from expanse import Expanse 
 from clock import Clock
 from spin import Spin
 from shader import Shader
