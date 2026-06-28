@@ -4,9 +4,7 @@ import random
 
 class Expanse:
     def __init__(self, color_palette, alpha):
-        self.alpha = alpha
-        self.set_palette(color_palette)
-        self.state = np.zeros((397,3), dtype=int)
+        self.set_palette(color_palette, alpha)
 
         self.color_bins = {}
         for i in range(len(self.color_palette)):
@@ -17,15 +15,12 @@ class Expanse:
         
         self.spread_likelihood = 8
         
-    def set_palette(self, color_palette):
-        # cp_arr = np.asarray(color_palette)
-        # cp_arr = np.column_stack((cp_arr, np.full(cp_arr.shape[0])))
+    def set_palette(self, color_palette, alpha):
+        self.alpha = alpha
+        self.original_palette = color_palette
         self.color_palette = (np.asarray(color_palette) * self.alpha).astype(int)
-        # self.color_palette_bit = []
-        # for c in color_palette:
-        #     self.color_palette_bit.append((int(c[3]) << 24) (int(c[1]) << 16) + (int(c[0]) << 8) + int(c[2]))
 
-    def update(self, strip=None, hex_map=None):
+    def update(self, state):
         num_bins = len(self.color_bins)
         led_adj_dict = {idx: set(adj) for idx, adj in enumerate(led_adjacency) if adj}  # Convert list of lists to dict of sets
 
@@ -53,13 +48,7 @@ class Expanse:
                 for seed_pixel in isolated_pixels:
                     self.color_bins[(i + 1) % num_bins].add(seed_pixel)
                     bin.remove(seed_pixel)
-                    if strip:
-                        # strip.set_pixel_color(seed_pixel, self.color_palette_bit[i])
-                        self.state[seed_pixel, :] = self.color_palette[i]
-                    elif hex_map:
-                        # hex_map[seed_pixel].change_color(self.color_palette[i])
-                        self.state[seed_pixel, :] = self.color_palette[i]
-                    
+                    state[seed_pixel, :] = self.color_palette[i]
 
             # Prepare to move pixels to the next bin
             move_to_next_bin = set()
@@ -75,23 +64,13 @@ class Expanse:
 
                 if not_frontline and random.random() > ((adjacent_count) / self.spread_likelihood):
                     move_to_next_bin.add(pix_id)
-                    if strip:
-                        # strip.set_pixel_color(pix_id, self.color_palette_bit[i])
-                        self.state[pix_id, :] = self.color_palette[i]
-                    elif hex_map:
-                        # hex_map[pix_id].change_color(self.color_palette[i])
-                        self.state[pix_id, :] = self.color_palette[i]
+                state[pix_id, :] = self.color_palette[i]
 
             # Move pixels to the next bin
             bin.difference_update(move_to_next_bin)
             self.color_bins[(i + 1) % num_bins].update(move_to_next_bin)
 
-        return self.state.astype(int)
-
-        # self.spread_likelihood = ((self.spread_likelihood + 1) % self.spread_likelihood) + 6
-
-        # if strip:
-        #     strip.refresh_display()
+        return state.astype(int)
         
 
         

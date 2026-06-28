@@ -1,11 +1,19 @@
+# set working directory
+import os
+abspath = os.path.abspath(__file__)
+dname = os.path.dirname(abspath)
+os.chdir(dname)
+
 import numpy as np
 import hexy as hx
 import pygame as pg
 from text_for_hex import radial_to_irl_map
 from simulate_helpers import *
 from hex_mask import color_palette_11
-from expanse import Expanse
+from expanse import Expanse 
 from clock import Clock
+from spin import Spin
+from shader import Shader
 
 class Selection:
     class Type:
@@ -85,9 +93,10 @@ class ExampleHexMap:
         self.orient = True  # True => flat top hexes
         self.color_palette = list((np.asarray(color_palette_11[0])).astype(int))
 
-        self.alpha_bg = .5
-        self.alpha_cl = .4
+        self.alpha_bg = .8
+        self.alpha_cl = .2
 
+        self.spin = Spin(self.color_palette, self.alpha_bg)
         self.expanse = Expanse(self.color_palette, self.alpha_bg)
         self.clock_animation = Clock([255, 255, 255], self.alpha_cl)
         self.time_disp = TimeDisp()
@@ -141,9 +150,10 @@ class ExampleHexMap:
         self.clock = None
         self.init_pg()
 
-        # specific to expanse animation
-        self.frontline_ids = set()
-        self.candidate_ids = set()
+        self.shader = Shader(self.color_palette, self.alpha_bg)
+        self.shader.initialize_opengl()
+
+
 
         self.color_bins = {}
         for i in range(len(self.color_palette)):
@@ -153,14 +163,14 @@ class ExampleHexMap:
                 self.color_bins[i] = set()
 
     def update_sim(self):
-        state = self.expanse.update(hex_map=self.hex_map)
-        state = state + self.clock_animation.update(hex_map=self.hex_map)
-        
+        state = np.zeros((397,3), dtype=int)
+        # state = self.expanse.update(state)
+        # state = self.spin.update(state)
+        state = self.shader.update(state)
+        state = self.clock_animation.update(state)
         state = np.clip(state, 0, 255)
         
         for pix_id, color in enumerate(state):
-            if pix_id == 42:
-                x = 1
             self.hex_map[pix_id].change_color(color)
 
     def init_pg(self):
@@ -180,8 +190,18 @@ class ExampleHexMap:
                 running = False
 
             if event.type == pg.KEYDOWN:
-                if event.key == pg.K_ESCAPE:
-                    running = False
+                if event.key == pg.K_ESCAPE or event.key == pg.K_q:
+                    print('escape')
+                    running = False 
+                if event.key == pg.K_UP:
+                    print('change shader')
+                    self.shader.change_shader()
+                if event.key == pg.K_RIGHT:
+                    self.shader.blur_sigma = (self.shader.blur_sigma + .5)
+                    print('change blur sigma: ', self.shader.blur_sigma)
+                if event.key == pg.K_LEFT:
+                    self.shader.blur_sigma = max(0, (self.shader.blur_sigma - .5))
+                    print('change blur sigma: ', self.shader.blur_sigma)
 
         return running
 
@@ -220,30 +240,6 @@ class ExampleHexMap:
     def quit_app(self):
         pg.quit()
         raise SystemExit
-
-def diplay_leds(hex_map_obj):
-    from rpi_ws281x import PixelStrip, Color
-    # LED strip configuration:
-    LED_COUNT = 397        # Number of LED pixels.
-    LED_PIN = 18          # GPIO pin connected to the pixels (18 uses PWM!).
-    # LED_PIN = 10        # GPIO pin connected to the pixels (10 uses SPI /dev/spidev0.0).
-    LED_FREQ_HZ = 800000  # LED signal frequency in hertz (usually 800khz)
-    LED_DMA = 10          # DMA channel to use for generating signal (try 10)
-    LED_BRIGHTNESS = 100  # Set to 0 for darkest and 255 for brightest
-    LED_INVERT = False    # True to invert the signal (when using NPN transistor level shift)
-    LED_CHANNEL = 0       # set to '1' for GPIOs 13, 19, 41, 45 or 53
-
-    strip = PixelStrip(LED_COUNT, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL)
-    strip.begin()
-
-    color = Color(255,0,0)
-    wait_ms = 50 
-    for i, hexagon in enumerate(list(hex_map_obj.hex_map.values())):
-        if hexagon.value:
-            strip.setPixelColor(hexagon.value, color)
-            strip.show()
-            time.sleep(wait_ms / 1000.0)
-
 
 if __name__ == '__main__':    
     example_hex_map = ExampleHexMap()
