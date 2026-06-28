@@ -148,54 +148,102 @@ class Shader:
 
     def build_pixel_map(self):
 
+        #
+        # cartesian_coords comes from hex_mask.py
+        #
+        # IMPORTANT:
+        #
+        # The original project treats:
+        #
+        #   cartesian_coords[:,0] = image row (Y)
+        #   cartesian_coords[:,1] = image column (X)
+        #
+        # Keep this orientation!
+        #
 
-        coords = cartesian_coords.copy()
+        coords = cartesian_coords.astype(float)
 
 
         #
-        # Normalize coordinates so the entire hex fits
+        # Find center of the physical hex
         #
 
-        min_x = np.min(coords[:,0])
-        max_x = np.max(coords[:,0])
+        center_y = (
+            np.max(coords[:,0]) +
+            np.min(coords[:,0])
+        ) / 2.0
 
-        min_y = np.min(coords[:,1])
-        max_y = np.max(coords[:,1])
 
+        center_x = (
+            np.max(coords[:,1]) +
+            np.min(coords[:,1])
+        ) / 2.0
 
-        width = max_x - min_x
-        height = max_y - min_y
 
 
         #
-        # Choose framebuffer size
-        #
-        # This controls shader resolution.
-        # Increase if you want more detail.
+        # Move hex center to (0,0)
         #
 
-        self.framebuffer_size = int(
-            max(width,height) + 4
+        coords[:,0] -= center_y
+        coords[:,1] -= center_x
+
+
+
+        #
+        # Find the size needed to fit the hex
+        #
+
+        max_extent = max(
+            np.max(np.abs(coords[:,0])),
+            np.max(np.abs(coords[:,1]))
         )
 
 
-        #
-        # Convert physical coordinates
-        # into framebuffer coordinates
-        #
-
-        x = coords[:,0] - min_x + 2
-
-        y = coords[:,1] - min_y + 2
-
 
         #
-        # OpenGL framebuffer origin is bottom-left.
+        # Add small padding so edge LEDs
+        # are not clipped
         #
 
-        y = self.framebuffer_size - y
+        padding = 2
 
 
+        self.framebuffer_size = int(
+            max_extent * 2 + padding
+        )
+
+
+
+        #
+        # Convert centered coordinates into
+        # OpenGL texture coordinates
+        #
+        # OpenGL origin is bottom-left.
+        #
+        # Pixel array origin is top-left.
+        #
+
+        x = (
+            coords[:,1]
+            +
+            self.framebuffer_size / 2
+        )
+
+
+        y = (
+            self.framebuffer_size / 2
+            -
+            coords[:,0]
+        )
+
+
+
+        #
+        # Store lookup table:
+        #
+        # LED index -> framebuffer pixel
+        #
 
         self.pixel_map = np.column_stack(
             (
@@ -203,6 +251,7 @@ class Shader:
                 y.astype(int)
             )
         )
+
 
 
 
