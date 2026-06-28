@@ -5,7 +5,7 @@ import numpy as np
 from OpenGL.GL import *
 from OpenGL.GL.shaders import compileProgram, compileShader
 from pyglet.gl import Config, Context
-from hex_mask import cartesian_coords, adjacency
+from hex_mask import cartesian_coords, adjacency, cube_coords
 
 class Shader:
     def __init__(self, color_palette, alpha):
@@ -43,11 +43,10 @@ class Shader:
     def build_pixel_map(self):
         coords = cartesian_coords.astype(float)
 
-        # cartesian_coords convention:
-        # coords[:,0] = display row / Y
-        # coords[:,1] = display column / X
-        center_y = (np.max(coords[:, 0]) + np.min(coords[:, 0])) / 2.0
-        center_x = (np.max(coords[:, 1]) + np.min(coords[:, 1])) / 2.0
+        # Use the true center LED: cube coordinate [0,0,0].
+        center_led = np.where(np.all(cube_coords == [0, 0, 0], axis=1))[0][0]
+        center_y = coords[center_led, 0]
+        center_x = coords[center_led, 1]
 
         coords[:, 0] -= center_y
         coords[:, 1] -= center_x
@@ -57,21 +56,27 @@ class Shader:
             np.max(np.abs(coords[:, 1]))
         )
 
-        # Small padding prevents edge LEDs from clipping.
-        self.canvas_size = int(max_extent * 2 + 5)
-
+        self.canvas_size = int(np.ceil(max_extent * 2 + 7))
         if self.canvas_size % 2 == 0:
             self.canvas_size += 1
 
         center_pixel = self.canvas_size // 2
 
-        x = coords[:, 1] + center_pixel
-        y = coords[:, 0] + center_pixel
+        # Optional fine tuning, in framebuffer pixels.
+        # If image appears shifted up/right, try negative values.
+        self.display_offset_x = 0.0
+        self.display_offset_y = 0.0
+
+        x = coords[:, 1] + center_pixel + self.display_offset_x
+        y = coords[:, 0] + center_pixel + self.display_offset_y
 
         self.pixel_map = np.column_stack((
             np.rint(x).astype(int),
             np.rint(y).astype(int)
         ))
+
+        self.pixel_map[:, 0] = np.clip(self.pixel_map[:, 0], 0, self.canvas_size - 1)
+        self.pixel_map[:, 1] = np.clip(self.pixel_map[:, 1], 0, self.canvas_size - 1)
 
     def change_shader(self):
         self.shader_id = (self.shader_id + 1) % len(self.shader_files)
