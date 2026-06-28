@@ -15,8 +15,8 @@ class Shader:
         self.frame = 0
 
         # Smoothing controls.
-        self.shader_time_scale = 0.5          # Lower = slower animation.
-        self.neighbor_strength = 0.30         # Higher = more spatial smoothing.
+        self.shader_time_scale = 1.0          # Lower = slower animation.
+        self.neighbor_strength = 0.0         # Higher = more spatial smoothing.
         self.temporal_alpha = 0.35            # Lower = smoother/slower frame changes.
         self.previous_led_frame = None
 
@@ -58,12 +58,20 @@ class Shader:
         )
 
         # Small padding prevents edge LEDs from clipping.
-        self.canvas_size = int(max_extent * 2 + 4)
+        self.canvas_size = int(max_extent * 2 + 5)
 
-        x = coords[:, 1] + self.canvas_size / 2
-        y = coords[:, 0] + self.canvas_size / 2
+        if self.canvas_size % 2 == 0:
+            self.canvas_size += 1
 
-        self.pixel_map = np.column_stack((x.astype(int), y.astype(int)))
+        center_pixel = self.canvas_size // 2
+
+        x = coords[:, 1] + center_pixel
+        y = coords[:, 0] + center_pixel
+
+        self.pixel_map = np.column_stack((
+            np.rint(x).astype(int),
+            np.rint(y).astype(int)
+        ))
 
     def change_shader(self):
         self.shader_id = (self.shader_id + 1) % len(self.shader_files)
