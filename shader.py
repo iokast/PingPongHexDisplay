@@ -155,6 +155,11 @@ class Shader:
             "iFrame"
         )
 
+        self.iMouse_location = glGetUniformLocation(
+            self.shader_program,
+            "iMouse"
+        )
+
     def compile_shaders(self):
         vertex_shader = """
         #version 100
@@ -243,6 +248,13 @@ class Shader:
         glUniform1f(self.iTime_location, elapsed)
         glUniform1f(self.iTimeDelta_location, 1.0 / 60.0)
         glUniform1i(self.iFrame_location, self.frame)
+        glUniform4f(
+            self.iMouse_location,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+        )
 
         self.frame += 1
 
