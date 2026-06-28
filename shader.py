@@ -31,7 +31,14 @@ class Shader:
             self.shadertoy_code = f.read()
 
         self.build_pixel_map()
+        self.build_neighbor_map()
         self.iResolution = (float(self.canvas_size), float(self.canvas_size))
+
+    def build_neighbor_map(self):
+        self.neighbor_ids = []
+        for led_id in range(len(adjacency)):
+            neighbors = [n for n in adjacency[led_id] if n is not None]
+            self.neighbor_ids.append(np.array(neighbors, dtype=np.int32))
 
     def build_pixel_map(self):
         coords = cartesian_coords.astype(float)
@@ -292,23 +299,14 @@ class Shader:
             return led_frame
 
         smoothed = led_frame.copy()
+        s = self.neighbor_strength
 
-        for led_id in range(led_frame.shape[0]):
-            neighbors = []
-
-            for n in adjacency[led_id]:
-                if n is not None:
-                    neighbors.append(n)
-
-            if len(neighbors) == 0:
+        for led_id, neighbors in enumerate(self.neighbor_ids):
+            if neighbors.size == 0:
                 continue
 
-            neighbor_avg = np.mean(led_frame[neighbors], axis=0)
-
-            smoothed[led_id] = (
-                (1.0 - self.neighbor_strength) * led_frame[led_id] +
-                self.neighbor_strength * neighbor_avg
-            )
+            neighbor_avg = led_frame[neighbors].mean(axis=0)
+            smoothed[led_id] = (1.0 - s) * led_frame[led_id] + s * neighbor_avg
 
         return smoothed
 
