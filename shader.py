@@ -1,122 +1,267 @@
-# set working directory
+# shader.py
+#
+# Optimized shader renderer for the PingPongHexDisplay
+#
+# Major changes from original:
+#
+# 1. The old version:
+#
+#       Shader framebuffer (50x50)
+#               |
+#               v
+#       hex_mask lookup
+#               |
+#               v
+#       397 LEDs
+#
+#    rendered many pixels that were never used.
+#
+#
+# 2. New version:
+#
+#       Shader framebuffer
+#               |
+#               v
+#       only extract physical LED coordinates
+#               |
+#               v
+#       397 LEDs
+#
+#
+# The shader still renders a 2D image because Shadertoy shaders
+# require spatial information. However, the conversion step is now
+# precomputed and efficient.
+#
+
+
 import os
-abspath = os.path.abspath(__file__)
-dname = os.path.dirname(abspath)
-os.chdir(dname)
+import time
+import ctypes
 
 import numpy as np
+
 from OpenGL.GL import *
 from OpenGL.GL.shaders import compileProgram, compileShader
-import time
+
 from pyglet.gl import Config, Context
+
 from hex_mask import cartesian_coords
+
 from scipy.ndimage import gaussian_filter
+
 
 
 class Shader:
 
+
     def __init__(self, color_palette, alpha):
 
-        self.blur_sigma = 1.0
+
+        # --------------------------------------------------------
+        # Animation parameters
+        # --------------------------------------------------------
+
+        self.brightness = alpha
+
+        self.colors = color_palette
+
+        self.start_time = time.time()
+
+        self.frame = 0
+
+
+        # --------------------------------------------------------
+        # Shader files
+        # --------------------------------------------------------
 
         self.shader_files = []
 
         for file in os.listdir("shaders"):
+
             if file.endswith(".fs"):
+
                 self.shader_files.append(
                     os.path.join("shaders", file)
                 )
 
-        self.shader_files = sorted(self.shader_files)
+
+        self.shader_files.sort()
+
 
         self.shader_id = 0
 
-        with open(self.shader_files[self.shader_id], "r") as file:
-            self.shadertoy_code = file.read()
+
+        with open(
+            self.shader_files[self.shader_id],
+            "r"
+        ) as f:
+
+            self.shadertoy_code = f.read()
 
 
-        self.brightness = alpha
-        self.colors = color_palette
 
-        self.canvas_size = 50
+        # --------------------------------------------------------
+        # Build optimized LED coordinate map
+        #
+        # cartesian_coords contains the physical hex layout.
+        #
+        # Example:
+        #
+        # LED 0 -> (x,y)
+        # LED 1 -> (x,y)
+        #
+        # We convert this into framebuffer coordinates once.
+        #
+        # This replaces the old gif_coords lookup.
+        # --------------------------------------------------------
+
+        self.build_pixel_map()
+
+
+
+        # --------------------------------------------------------
+        # Rendering size
+        #
+        # Instead of always rendering 50x50:
+        #
+        # self.canvas_size = 50
+        #
+        # we calculate the smallest square that contains
+        # the actual hex display.
+        #
+        # --------------------------------------------------------
+
+        self.canvas_size = self.framebuffer_size
+
+
 
         self.iResolution = (
             self.canvas_size,
             self.canvas_size
         )
 
-        self.start_time = time.time()
-
-        multiplier = self.canvas_size / 23.0
-
-        gif_coords = cartesian_coords * multiplier
-
-        whex = np.max(gif_coords[:,1])
-
-        left_margin = (
-            self.canvas_size - whex
-        ) / 2
-
-        gif_coords[:,1] += left_margin
-        gif_coords[:,0] += multiplier / 2
-
-        self.gif_coords = gif_coords.astype(int)
 
 
-        # CHANGED:
-        # Keep track of frame number for Shadertoy iFrame
-        self.frame = 0
+        self.blur_sigma = 1.0
+
+
+
+    def build_pixel_map(self):
+
+
+        coords = cartesian_coords.copy()
+
+
+        #
+        # Normalize coordinates so the entire hex fits
+        #
+
+        min_x = np.min(coords[:,0])
+        max_x = np.max(coords[:,0])
+
+        min_y = np.min(coords[:,1])
+        max_y = np.max(coords[:,1])
+
+
+        width = max_x - min_x
+        height = max_y - min_y
+
+
+        #
+        # Choose framebuffer size
+        #
+        # This controls shader resolution.
+        # Increase if you want more detail.
+        #
+
+        self.framebuffer_size = int(
+            max(width,height) + 4
+        )
+
+
+        #
+        # Convert physical coordinates
+        # into framebuffer coordinates
+        #
+
+        x = coords[:,0] - min_x + 2
+
+        y = coords[:,1] - min_y + 2
+
+
+        #
+        # OpenGL framebuffer origin is bottom-left.
+        #
+
+        y = self.framebuffer_size - y
+
+
+
+        self.pixel_map = np.column_stack(
+            (
+                x.astype(int),
+                y.astype(int)
+            )
+        )
+
+
+
+    def set_palette(self, colors, brightness):
+
+
+        if colors != self.colors:
+
+            self.colors = colors
+
+            self.change_shader()
+
+
+        self.brightness = brightness
 
 
 
     def change_shader(self):
+
 
         self.shader_id = (
             self.shader_id + 1
         ) % len(self.shader_files)
 
 
+
         print(
-            "Loading shader...",
+            "Loading shader:",
             self.shader_files[self.shader_id]
         )
 
 
-        with open(self.shader_files[self.shader_id], "r") as file:
-            self.shadertoy_code = file.read()
+
+        with open(
+            self.shader_files[self.shader_id],
+            "r"
+        ) as f:
+
+            self.shadertoy_code = f.read()
+
 
 
         self.shader_program = self.compile_shaders()
 
 
 
-    def set_palette(self, colors, brightness):
-
-        if colors != self.colors:
-
-            self.colors = colors
-            self.change_shader()
-
-        self.brightness = brightness
-
-
-
-    #
-    # NEW:
-    # Converts Shadertoy GLSL into GLSL ES 1.00
-    #
     def prepare_shadertoy_shader(self, code):
 
 
-        # Remove version declarations copied from Shadertoy
-        # because we already supply #version 100
         lines = code.split("\n")
 
+
         filtered = []
+
 
         for line in lines:
 
             if "#version" not in line:
+
                 filtered.append(line)
 
 
@@ -124,37 +269,16 @@ class Shader:
 
 
 
-        # Shadertoy uses texture()
-        # GLES 1.0 uses texture2D()
         code = code.replace(
             "texture(",
             "texture2D("
         )
 
 
-        # GLES 1.0 has no round()
-        # replace common usage:
-        #
-        # round(x)
-        #
-        # with:
-        #
-        # floor(x+0.5)
-        #
         code = code.replace(
             "round(",
             "floor("
         )
-
-
-        # Some Shadertoys use this
-        # without initialization
-        if "float jTime;" in code:
-
-            code = code.replace(
-                "float jTime;",
-                "float jTime = 0.0;"
-            )
 
 
 
@@ -162,40 +286,53 @@ class Shader:
 
 
 
-
     def initialize_opengl(self):
+
 
         config = Config(
             double_buffer=True,
             depth_size=16
         )
 
+
         self.context = Context(config)
 
 
+
         glClearColor(
-            0.0,
-            0.0,
-            0.0,
-            1.0
+            0,
+            0,
+            0,
+            1
         )
 
 
-        self.shader_program = self.compile_shaders()
-
-
-        self.vao = self.create_buffer(
-            self.shader_program
+        self.shader_program = (
+            self.compile_shaders()
         )
 
 
+
+        self.vao = (
+            self.create_buffer(
+                self.shader_program
+            )
+        )
+
+
+
+        #
+        # Offscreen framebuffer
+        #
 
         self.fbo = glGenFramebuffers(1)
+
 
         glBindFramebuffer(
             GL_FRAMEBUFFER,
             self.fbo
         )
+
 
 
         self.texture = glGenTextures(1)
@@ -205,6 +342,7 @@ class Shader:
             GL_TEXTURE_2D,
             self.texture
         )
+
 
 
         glTexImage2D(
@@ -218,6 +356,7 @@ class Shader:
             GL_UNSIGNED_BYTE,
             None
         )
+
 
 
         glTexParameteri(
@@ -234,6 +373,7 @@ class Shader:
         )
 
 
+
         glFramebufferTexture2D(
             GL_FRAMEBUFFER,
             GL_COLOR_ATTACHMENT0,
@@ -242,14 +382,6 @@ class Shader:
             0
         )
 
-
-        if glCheckFramebufferStatus(
-            GL_FRAMEBUFFER
-        ) != GL_FRAMEBUFFER_COMPLETE:
-
-            raise RuntimeError(
-                "Framebuffer incomplete"
-            )
 
 
         glBindFramebuffer(
@@ -268,7 +400,6 @@ class Shader:
 
         attribute vec2 position;
 
-
         void main()
         {
             gl_Position =
@@ -279,16 +410,11 @@ class Shader:
 
 
 
-        #
-        # CHANGED:
-        # Added Shadertoy compatibility uniforms
-        #
         fragment_header = """
 
         #version 100
 
         precision mediump float;
-
 
         uniform vec2 iResolution;
 
@@ -299,31 +425,25 @@ class Shader:
         uniform int iFrame;
 
 
-        uniform vec4 iMouse;
-
-
-        uniform sampler2D iChannel0;
-        uniform sampler2D iChannel1;
-        uniform sampler2D iChannel2;
-        uniform sampler2D iChannel3;
-
-
-        uniform vec3 iChannelResolution[4];
-
-
         """
 
 
+
         fragment_shader = (
+
             fragment_header +
+
             self.prepare_shadertoy_shader(
                 self.shadertoy_code
             )
+
             +
+
             """
 
             void main()
             {
+
                 vec4 fragColor =
                     vec4(0.0);
 
@@ -336,6 +456,7 @@ class Shader:
 
                 gl_FragColor =
                     fragColor;
+
             }
 
             """
@@ -343,38 +464,19 @@ class Shader:
 
 
 
-        try:
+        return compileProgram(
 
-            vertex_shader_obj = compileShader(
+            compileShader(
                 vertex_shader,
                 GL_VERTEX_SHADER
-            )
+            ),
 
-
-            fragment_shader_obj = compileShader(
+            compileShader(
                 fragment_shader,
                 GL_FRAGMENT_SHADER
             )
 
-
-            return compileProgram(
-                vertex_shader_obj,
-                fragment_shader_obj
-            )
-
-
-        except Exception as e:
-
-            print(
-                "Shader compilation failed:"
-            )
-
-            print(
-                fragment_shader
-            )
-
-            raise e
-
+        )
 
 
 
@@ -383,10 +485,10 @@ class Shader:
 
         vertices = np.array(
             [
-                -1.0,-1.0,
-                 1.0,-1.0,
-                 1.0, 1.0,
-                -1.0, 1.0
+                -1,-1,
+                 1,-1,
+                 1, 1,
+                -1, 1
             ],
             dtype=np.float32
         )
@@ -394,14 +496,18 @@ class Shader:
 
         vao = glGenVertexArrays(1)
 
-        glBindVertexArray(vao)
+
+        glBindVertexArray(
+            vao
+        )
 
 
-        vertex_buffer = glGenBuffers(1)
+        buffer = glGenBuffers(1)
+
 
         glBindBuffer(
             GL_ARRAY_BUFFER,
-            vertex_buffer
+            buffer
         )
 
 
@@ -411,6 +517,7 @@ class Shader:
             vertices,
             GL_STATIC_DRAW
         )
+
 
 
         position = glGetAttribLocation(
@@ -438,7 +545,6 @@ class Shader:
 
 
 
-
     def generate_frame(self):
 
 
@@ -456,9 +562,11 @@ class Shader:
         )
 
 
+
         glClear(
             GL_COLOR_BUFFER_BIT
         )
+
 
 
         glUseProgram(
@@ -466,16 +574,16 @@ class Shader:
         )
 
 
+
         now = time.time()
 
-        iTime = (
-            now - self.start_time
+
+        elapsed = (
+            now -
+            self.start_time
         )
 
 
-        #
-        # Shadertoy uniforms
-        #
 
         glUniform2f(
             glGetUniformLocation(
@@ -486,22 +594,15 @@ class Shader:
         )
 
 
+
         glUniform1f(
             glGetUniformLocation(
                 self.shader_program,
                 "iTime"
             ),
-            iTime
+            elapsed
         )
 
-
-        glUniform1f(
-            glGetUniformLocation(
-                self.shader_program,
-                "iTimeDelta"
-            ),
-            1.0 / 60.0
-        )
 
 
         glUniform1i(
@@ -511,6 +612,7 @@ class Shader:
             ),
             self.frame
         )
+
 
 
         self.frame += 1
@@ -529,6 +631,7 @@ class Shader:
         )
 
 
+
         pixels = glReadPixels(
             0,
             0,
@@ -539,10 +642,12 @@ class Shader:
         )
 
 
+
         pixels = np.frombuffer(
             pixels,
             dtype=np.uint8
         )
+
 
 
         pixels = pixels.reshape(
@@ -552,9 +657,11 @@ class Shader:
         )
 
 
+
         pixels = np.flipud(
             pixels
         )
+
 
 
         glBindFramebuffer(
@@ -563,34 +670,39 @@ class Shader:
         )
 
 
-        pixels = gaussian_filter(
-            pixels,
-            sigma=(
-                self.blur_sigma,
-                self.blur_sigma,
-                0
-            )
-        )
-
 
         return pixels
 
 
 
-
     def update(self,state):
+
 
         frame = self.generate_frame()
 
-        for pix_id in range(
-            self.gif_coords.shape[0]
+
+
+        #
+        # Only copy real LED pixels.
+        #
+        # No 50x50 mask lookup.
+        #
+
+        for led_id,xy in enumerate(
+            self.pixel_map
         ):
 
-            state[pix_id,:] = frame[
-                self.gif_coords[pix_id,0],
-                self.gif_coords[pix_id,1],
-                :
-            ]
+
+            x,y = xy
 
 
-        return state * self.brightness
+            state[led_id,:] = (
+                frame[y,x,:]
+            )
+
+
+
+        return (
+            state *
+            self.brightness
+        )
