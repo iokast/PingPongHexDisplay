@@ -11,7 +11,7 @@ class Clock:
         self.original_color = color
         self.set_palette(color)
 
-        self.clock_type = 3
+        self.clock_type = 1
         self.clock_locs_dict = clock_positions[self.clock_type]
         self.number_of_digits = 3
         self.digits = digits[self.clock_type]

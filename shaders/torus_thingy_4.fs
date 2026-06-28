@@ -27,11 +27,11 @@ void mainImage(out vec4 c_out, in vec2 f)
 {
     h *= 0.;
     volumetric *= 0.;
-    t = iTime;
+    t = iTime * .25;
     vec3	col = vec3(0., 0., 0.);
 	vec2	uv  = vec2((f.x-.5*iResolution.x)/iResolution.x, (f.y-.5*iResolution.y)/iResolution.y);
 	vec3	dir = camera(uv);
-    vec3	pos = vec3(-.0, .0, 25.0-sin(iTime*.125)*25.*0.-21.+2.);
+    vec3	pos = vec3(-.0, .0, 25.0-sin(t*.125)*25.*0.-21.+2.);
 
     vec4	inter = (march(pos, dir));
 
@@ -72,22 +72,22 @@ float	scene(vec3 p)
     
     pr = p;
     
-    rotate(pr.yz , iTime*.5);
-    rotate(pr.xz , iTime*1.);
+    rotate(pr.yz , t*.5);
+    rotate(pr.xz , t*1.);
         
     float	ata = atan(pr.x, pr.y)*1.+0.;
     
     q = vec2(length(pr.xy)-2., pr.z);
     
-    rotate(q.xy, +iTime*2.+ata*2.);
+    rotate(q.xy, +t*2.+ata*2.);
     
     q.xy = abs(q.xy)-.25;
     
-    rotate(q.xy, -iTime*2.+ata*1. );
+    rotate(q.xy, -t*2.+ata*1. );
     q.x = abs(q.x)-.25;
-    rotate(q.xy, +iTime*2.+ata*8. );
+    rotate(q.xy, +t*2.+ata*8. );
     q.xy = abs(q.xy)-.051;
-    balls = mylength(q)+(-.0405+sin( (ata*2.)-iTime*3.)*.0251);
+    balls = mylength(q)+(-.0405+sin( (ata*2.)-t*3.)*.0251);
     
     
     
@@ -96,7 +96,7 @@ float	scene(vec3 p)
 	#ifdef	FUDGE
     balls *= .5;
     #endif
-    rotate(p.yx, iTime*.5);
+    rotate(p.yx, t*.5);
     #ifdef	FUDGE
     lumos = length(p.y-18.)-20.1;
     h += (.251/(lumos + 10.1))*vec3(.0,.0,.5);
