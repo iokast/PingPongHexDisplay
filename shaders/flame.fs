@@ -33,9 +33,7 @@ vec4 raymarch(vec3 org, vec3 dir)
 	vec3  p = org;
 	bool glowed = false;
 	
-	// The LED display cannot resolve the extra detail from the original 64
-	// steps. Forty retains the shape while substantially reducing noise work.
-	for(int i=0; i<40; i++)
+	for(int i=0; i<64; i++)
 	{
 		d = scene(p) + eps;
 		p += d * dir;
@@ -44,7 +42,7 @@ vec4 raymarch(vec3 org, vec3 dir)
 			if(flame(p) < .0)
 				glowed=true;
 			if(glowed)
-			glow = float(i)/40.;
+			glow = float(i)/64.;
 		}
 	}
 	return vec4(p,glow);

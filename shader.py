@@ -33,8 +33,13 @@ class Shader:
             os.environ.get("PPL_SUPERSAMPLE", "1") != "0"
         )
         self.sample_radius = float(os.environ.get("PPL_SAMPLE_RADIUS", "0.45"))
+        self.shader_zoom = float(os.environ.get("PPL_SHADER_ZOOM", "1.2"))
         self.sample_offsets = self.build_sample_offsets()
-        self.heavy_shaders = {"flame.fs", "protean_clouds.fs"}
+        self.heavy_shaders = {
+            "cineshader_laval.fs",
+            "flame.fs",
+            "protean_clouds.fs",
+        }
 
         self.shader_files = sorted([
             os.path.join("shaders", f)
@@ -54,8 +59,8 @@ class Shader:
         if not self.supersample:
             return np.zeros((1, 2), dtype=np.float32)
 
-        # Put a symmetric three-point ring first. Heavy shaders can draw only
-        # the first four rows (center + this ring) without rebuilding buffers.
+        # Put the center and a symmetric three-point ring first so heavy
+        # shaders can draw only those four rows without rebuilding buffers.
         angles = np.array([0, 2, 4, 1, 3, 5], dtype=np.float32) * (np.pi / 3.0)
         ring = np.column_stack((np.cos(angles), np.sin(angles)))
         ring *= self.sample_radius
@@ -80,7 +85,7 @@ class Shader:
         shader_name = os.path.basename(self.shader_files[self.shader_id])
         if shader_name in self.heavy_shaders:
             requested = int(os.environ.get("PPL_HEAVY_SAMPLES", "4"))
-            return requested if requested in (1, 4, 7) else 4
+            return requested if requested in (4, 7) else 4
         return len(self.sample_offsets)
 
     def build_neighbor_map(self):
@@ -313,6 +318,13 @@ class Shader:
                 self.pixel_map[:, 0].astype(np.float32) + 0.5,
                 self.canvas_size - self.pixel_map[:, 1].astype(np.float32) - 0.5,
             ))
+            canvas_center = np.array(
+                [self.canvas_size / 2.0, self.canvas_size / 2.0],
+                dtype=np.float32,
+            )
+            sample_centers = canvas_center + (
+                sample_centers - canvas_center
+            ) * self.shader_zoom
             # Sample-major ordering matches glReadPixels' row-major layout.
             sample_coords = (
                 sample_centers[np.newaxis, :, :] +
