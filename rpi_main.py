@@ -16,6 +16,7 @@ import time
 from threading import Thread
 from shader import Shader
 from queue import Queue
+from solar_dimmer import SolarDimmer
 
 # Flask app
 app = Flask(__name__)
@@ -36,6 +37,8 @@ class Display():
         self.is_on = True
         self.gamma_adj = np.array(gamma_adj)
         self.state = np.zeros((397, 3), dtype=np.int16)
+        self.dimmer = SolarDimmer()
+        self.dimmer_brightness = 1.0
 
         # Setup animations
         self.background_animations = [Shader(color_palette=self.colors, alpha=self.brightness_background),
@@ -68,6 +71,9 @@ class Display():
         state = self.background_animations[self.background_animation_id].update(state)
         background_done = time.perf_counter()
         state = self.clock_animations[self.clock_animation_id].update(state)
+        self.dimmer_brightness = self.dimmer.brightness()
+        if self.dimmer_brightness != 1.0:
+            state = (state * self.dimmer_brightness).astype(np.int16)
         state = np.clip(state, 0, 255)
         state = self.gamma_adj[state]
 
@@ -104,13 +110,20 @@ def set_params():
             display.brightness_background = float(data["brightness_background"]) / 100
         if "brightness_clock" in data:
             display.brightness_clock = float(data["brightness_clock"]) / 100
+        if "brightness_background" in data or "brightness_clock" in data:
+            display.dimmer.start_override()
+            display.dimmer_brightness = 1.0
         display.set_color_and_brightness()
 
         if "fps" in data:
             fps = float(data["fps"])
             display.frame_interval = 0.0 if fps <= 0 else 1.0 / fps
 
-    return jsonify({"status": "parameters updated"})
+    return jsonify({
+        "status": "parameters updated",
+        "automatic_dimmer": not display.dimmer.override_active(),
+        "dimmer_brightness": display.dimmer_brightness,
+    })
 
 @app.route('/change_colors', methods=['POST'])
 def change_colors():
@@ -195,7 +208,9 @@ def animation_loop():
                     f"compose {averages_ms[1]:4.1f} ms | "
                     f"pixels {averages_ms[2]:4.1f} ms | "
                     f"render {averages_ms[3]:4.1f} ms | "
-                    f"sleep {averages_ms[4]:4.1f} ms",
+                    f"sleep {averages_ms[4]:4.1f} ms | "
+                    f"dim {display.dimmer_brightness * 100:3.0f}%"
+                    f"{' manual' if display.dimmer.override_active() else ' auto'}",
                     end='\r',
                 )
                 report_start = time.perf_counter()
