@@ -60,7 +60,9 @@ vec4 render( in vec3 ro, in vec3 rd, float time )
 	vec3 lpos = vec3(disp(time + ldst)*0.5, time + ldst);
 	float t = 1.5;
 	float fogT = 0.;
-	for(int i=0; i<80; i++)
+	// A lower march budget is visually equivalent at this display's spatial
+	// resolution and leaves room for spatial antialiasing.
+	for(int i=0; i<48; i++)
 	{
 		if(rez.a > 0.99)break;
 
@@ -76,8 +78,8 @@ vec4 render( in vec3 ro, in vec3 rd, float time )
             col = vec4(sin(vec3(5.,0.4,0.2) + mpv.y*0.1 +sin(pos.z*0.4)*0.5 + 1.8)*0.5 + 0.5,0.08);
             col *= den*den*den;
 			col.rgb *= linstep(4.,-2.5, mpv.x)*2.3;
-            float dif =  clamp((den - map(pos+.8).x)/9., 0.001, 1. );
-            dif += clamp((den - map(pos+.35).x)/2.5, 0.001, 1. );
+            // One forward density sample is sufficient on the LED lattice.
+            float dif = clamp((den - map(pos+.45).x)/3.2, 0.001, 1.);
             col.xyz *= den*(vec3(0.005,.045,.075) + 1.5*vec3(0.033,0.07,0.03)*dif);
         }
 		

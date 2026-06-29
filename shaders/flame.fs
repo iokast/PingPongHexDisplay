@@ -33,7 +33,9 @@ vec4 raymarch(vec3 org, vec3 dir)
 	vec3  p = org;
 	bool glowed = false;
 	
-	for(int i=0; i<64; i++)
+	// The LED display cannot resolve the extra detail from the original 64
+	// steps. Forty retains the shape while substantially reducing noise work.
+	for(int i=0; i<40; i++)
 	{
 		d = scene(p) + eps;
 		p += d * dir;
@@ -42,7 +44,7 @@ vec4 raymarch(vec3 org, vec3 dir)
 			if(flame(p) < .0)
 				glowed=true;
 			if(glowed)
-       			glow = float(i)/64.;
+			glow = float(i)/40.;
 		}
 	}
 	return vec4(p,glow);
@@ -65,4 +67,3 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 	//fragColor = mix(vec4(1.), mix(vec4(1.,.5,.1,1.),vec4(0.1,.5,1.,1.),p.y*.02+.4), pow(glow*2.,4.));
 
 }
-

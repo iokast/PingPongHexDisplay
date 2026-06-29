@@ -34,6 +34,7 @@ class Shader:
         )
         self.sample_radius = float(os.environ.get("PPL_SAMPLE_RADIUS", "0.45"))
         self.sample_offsets = self.build_sample_offsets()
+        self.heavy_shaders = {"flame.fs", "protean_clouds.fs"}
 
         self.shader_files = sorted([
             os.path.join("shaders", f)
@@ -53,7 +54,9 @@ class Shader:
         if not self.supersample:
             return np.zeros((1, 2), dtype=np.float32)
 
-        angles = np.arange(6, dtype=np.float32) * (np.pi / 3.0)
+        # Put a symmetric three-point ring first. Heavy shaders can draw only
+        # the first four rows (center + this ring) without rebuilding buffers.
+        angles = np.array([0, 2, 4, 1, 3, 5], dtype=np.float32) * (np.pi / 3.0)
         ring = np.column_stack((np.cos(angles), np.sin(angles)))
         ring *= self.sample_radius
         return np.vstack((np.zeros((1, 2), dtype=np.float32), ring)).astype(np.float32)
@@ -69,6 +72,16 @@ class Shader:
         if self.render_leds_only:
             return len(self.sample_offsets)
         return self.canvas_size
+
+    @property
+    def active_sample_count(self):
+        if not self.supersample:
+            return 1
+        shader_name = os.path.basename(self.shader_files[self.shader_id])
+        if shader_name in self.heavy_shaders:
+            requested = int(os.environ.get("PPL_HEAVY_SAMPLES", "4"))
+            return requested if requested in (1, 4, 7) else 4
+        return len(self.sample_offsets)
 
     def build_neighbor_map(self):
         self.neighbor_ids = []
@@ -381,7 +394,7 @@ class Shader:
 
         glBindVertexArray(self.vao)
         if self.render_leds_only:
-            glDrawArrays(GL_POINTS, 0, self.output_width * self.output_height)
+            glDrawArrays(GL_POINTS, 0, self.output_width * self.active_sample_count)
         else:
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
 
@@ -407,11 +420,15 @@ class Shader:
     def sample_led_pixels(self, frame):
         if self.render_leds_only:
             samples = frame.transpose(1, 0, 2)
-            if not self.supersample:
+            sample_count = self.active_sample_count
+            if sample_count == 1:
                 return samples[:, 0].astype(np.float32)
 
             # uint16 safely holds the maximum weighted total (8 * 255).
             samples = samples.astype(np.uint16)
+            if sample_count == 4:
+                return (samples[:, :4].sum(axis=1, dtype=np.uint16) >> 2).astype(np.float32)
+
             filtered = samples[:, 0] * 2
             filtered += samples[:, 1:].sum(axis=1, dtype=np.uint16)
             return (filtered >> 3).astype(np.float32)
