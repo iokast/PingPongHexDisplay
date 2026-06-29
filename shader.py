@@ -20,10 +20,20 @@ class Shader:
         self.temporal_alpha = 0.35            # Lower = smoother/slower frame changes.
         self.previous_led_frame = None
 
-        # Render one fragment per LED instead of drawing an entire square image
-        # and throwing almost all of it away. Set this to False if a shader
-        # relies on screen-space derivatives or neighboring fragments.
+        # Render only the samples needed by the LEDs instead of drawing an
+        # entire square image. Set this to False if a shader relies on
+        # screen-space derivatives or neighboring fragments.
         self.render_leds_only = os.environ.get("PPL_FULL_FRAME_SHADER") != "1"
+
+        # Seven samples cover each LED's hexagonal footprint. The center has
+        # weight 2 and each surrounding sample has weight 1, making the total
+        # weight 8 so averaging can use a cheap integer divide.
+        self.supersample = (
+            self.render_leds_only and
+            os.environ.get("PPL_SUPERSAMPLE", "1") != "0"
+        )
+        self.sample_radius = float(os.environ.get("PPL_SAMPLE_RADIUS", "0.45"))
+        self.sample_offsets = self.build_sample_offsets()
 
         self.shader_files = sorted([
             os.path.join("shaders", f)
@@ -38,6 +48,27 @@ class Shader:
         self.build_pixel_map()
         self.build_neighbor_map()
         self.iResolution = (float(self.canvas_size), float(self.canvas_size))
+
+    def build_sample_offsets(self):
+        if not self.supersample:
+            return np.zeros((1, 2), dtype=np.float32)
+
+        angles = np.arange(6, dtype=np.float32) * (np.pi / 3.0)
+        ring = np.column_stack((np.cos(angles), np.sin(angles)))
+        ring *= self.sample_radius
+        return np.vstack((np.zeros((1, 2), dtype=np.float32), ring)).astype(np.float32)
+
+    @property
+    def output_width(self):
+        if self.render_leds_only:
+            return len(self.pixel_map)
+        return self.canvas_size
+
+    @property
+    def output_height(self):
+        if self.render_leds_only:
+            return len(self.sample_offsets)
+        return self.canvas_size
 
     def build_neighbor_map(self):
         self.neighbor_ids = []
@@ -139,8 +170,8 @@ class Shader:
         self.texture = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, self.texture)
 
-        output_width = len(self.pixel_map) if self.render_leds_only else self.canvas_size
-        output_height = 1 if self.render_leds_only else self.canvas_size
+        output_width = self.output_width
+        output_height = self.output_height
         glTexImage2D(
             GL_TEXTURE_2D,
             0,
@@ -199,18 +230,16 @@ class Shader:
         if self.render_leds_only:
             vertex_shader = """
             #version 100
-            attribute float outputX;
+            attribute vec2 outputPosition;
             attribute vec2 sampleCoord;
             varying vec2 shaderFragCoord;
             void main()
             {
-                float x = ((outputX + 0.5) / __LED_COUNT__) * 2.0 - 1.0;
-                gl_Position = vec4(x, 0.0, 0.0, 1.0);
+                gl_Position = vec4(outputPosition, 0.0, 1.0);
                 gl_PointSize = 1.0;
                 shaderFragCoord = sampleCoord;
             }
             """
-            vertex_shader = vertex_shader.replace("__LED_COUNT__", str(float(len(self.pixel_map))))
         else:
             vertex_shader = """
             #version 100
@@ -267,10 +296,21 @@ class Shader:
         if self.render_leds_only:
             # The previous full-frame render was flipped vertically before
             # sampling. Convert each LED location back to OpenGL coordinates.
-            output_x = np.arange(len(self.pixel_map), dtype=np.float32)
-            sample_x = self.pixel_map[:, 0].astype(np.float32) + 0.5
-            sample_y = self.canvas_size - self.pixel_map[:, 1].astype(np.float32) - 0.5
-            vertices = np.column_stack((output_x, sample_x, sample_y)).astype(np.float32)
+            sample_centers = np.column_stack((
+                self.pixel_map[:, 0].astype(np.float32) + 0.5,
+                self.canvas_size - self.pixel_map[:, 1].astype(np.float32) - 0.5,
+            ))
+            # Sample-major ordering matches glReadPixels' row-major layout.
+            sample_coords = (
+                sample_centers[np.newaxis, :, :] +
+                self.sample_offsets[:, np.newaxis, :]
+            ).reshape(-1, 2)
+            output_x = ((np.arange(self.output_width, dtype=np.float32) + 0.5) /
+                        self.output_width) * 2.0 - 1.0
+            output_y = ((np.arange(self.output_height, dtype=np.float32) + 0.5) /
+                        self.output_height) * 2.0 - 1.0
+            output_positions = np.stack(np.meshgrid(output_x, output_y), axis=-1).reshape(-1, 2)
+            vertices = np.column_stack((output_positions, sample_coords)).astype(np.float32)
 
             vao = glGenVertexArrays(1)
             glBindVertexArray(vao)
@@ -279,11 +319,11 @@ class Shader:
             glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_STATIC_DRAW)
 
             stride = vertices.strides[0]
-            output_x_location = glGetAttribLocation(shader_program, "outputX")
+            output_position_location = glGetAttribLocation(shader_program, "outputPosition")
             sample_coord_location = glGetAttribLocation(shader_program, "sampleCoord")
-            glVertexAttribPointer(output_x_location, 1, GL_FLOAT, False, stride, ctypes.c_void_p(0))
-            glVertexAttribPointer(sample_coord_location, 2, GL_FLOAT, False, stride, ctypes.c_void_p(4))
-            glEnableVertexAttribArray(output_x_location)
+            glVertexAttribPointer(output_position_location, 2, GL_FLOAT, False, stride, ctypes.c_void_p(0))
+            glVertexAttribPointer(sample_coord_location, 2, GL_FLOAT, False, stride, ctypes.c_void_p(8))
+            glEnableVertexAttribArray(output_position_location)
             glEnableVertexAttribArray(sample_coord_location)
             return vao
 
@@ -317,8 +357,8 @@ class Shader:
 
     def generate_frame(self):
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
-        output_width = len(self.pixel_map) if self.render_leds_only else self.canvas_size
-        output_height = 1 if self.render_leds_only else self.canvas_size
+        output_width = self.output_width
+        output_height = self.output_height
         glViewport(0, 0, output_width, output_height)
         glClear(GL_COLOR_BUFFER_BIT)
         glUseProgram(self.shader_program)
@@ -341,7 +381,7 @@ class Shader:
 
         glBindVertexArray(self.vao)
         if self.render_leds_only:
-            glDrawArrays(GL_POINTS, 0, len(self.pixel_map))
+            glDrawArrays(GL_POINTS, 0, self.output_width * self.output_height)
         else:
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
 
@@ -358,9 +398,7 @@ class Shader:
         pixels = np.frombuffer(pixels, dtype=np.uint8)
         pixels = pixels.reshape(output_height, output_width, 3)
 
-        if self.render_leds_only:
-            pixels = pixels[0]
-        else:
+        if not self.render_leds_only:
             pixels = np.flipud(pixels)
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
@@ -368,7 +406,15 @@ class Shader:
 
     def sample_led_pixels(self, frame):
         if self.render_leds_only:
-            return frame.astype(np.float32)
+            samples = frame.transpose(1, 0, 2)
+            if not self.supersample:
+                return samples[:, 0].astype(np.float32)
+
+            # uint16 safely holds the maximum weighted total (8 * 255).
+            samples = samples.astype(np.uint16)
+            filtered = samples[:, 0] * 2
+            filtered += samples[:, 1:].sum(axis=1, dtype=np.uint16)
+            return (filtered >> 3).astype(np.float32)
 
         return frame[self.pixel_map[:, 1], self.pixel_map[:, 0]].astype(np.float32)
 
