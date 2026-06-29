@@ -30,7 +30,9 @@ class Display():
         self.brightness_clock = brightness_clock
         self.colors_id = colors_id
         self.colors = color_palette_11[colors_id]
-        self.ms_between_frames = 16
+        # Zero disables sleeping and is useful for measuring maximum throughput.
+        target_fps = float(os.environ.get("PPL_FPS", "60"))
+        self.frame_interval = 0.0 if target_fps <= 0 else 1.0 / target_fps
         self.is_on = True
         self.gamma_adj = np.array(gamma_adj)
         self.state = np.zeros((397, 3), dtype=np.int16)
@@ -60,9 +62,11 @@ class Display():
         self.clock_animations[self.clock_animation_id].change_color_type()
 
     def update(self):
+        frame_start = time.perf_counter()
         state = self.state
         state.fill(0)
         state = self.background_animations[self.background_animation_id].update(state)
+        background_done = time.perf_counter()
         state = self.clock_animations[self.clock_animation_id].update(state)
         state = np.clip(state, 0, 255)
         state = self.gamma_adj[state]
@@ -70,9 +74,18 @@ class Display():
         state_24bit = ((state[:, 1].astype(np.uint32) << 16) |
                        (state[:, 0].astype(np.uint32) << 8) |
                        state[:, 2].astype(np.uint32))
+        compose_done = time.perf_counter()
         self.strip.set_pixel_colors(state_24bit)
-
+        pixels_done = time.perf_counter()
         self.strip.refresh_display()
+        render_done = time.perf_counter()
+
+        self.last_timings = (
+            background_done - frame_start,
+            compose_done - background_done,
+            pixels_done - compose_done,
+            render_done - pixels_done,
+        )
 
     def turn_off(self):
         self.strip.turn_off()
@@ -94,7 +107,8 @@ def set_params():
         display.set_color_and_brightness()
 
         if "fps" in data:
-            display.ms_between_frames = int(1000 / float(data["fps"]))
+            fps = float(data["fps"])
+            display.frame_interval = 0.0 if fps <= 0 else 1.0 / fps
 
     return jsonify({"status": "parameters updated"})
 
@@ -152,23 +166,40 @@ def animation_loop():
     global display
     display.background_animations[0].initialize_opengl()
     frame_count = 0
-    num_loops_to_update_fps = 30
-    t0 = time.time()
-    previous_time = time.time()
+    num_loops_to_update_fps = 60
+    report_start = time.perf_counter()
+    timing_totals = np.zeros(5, dtype=float)
 
     try:
         while True:
+            frame_start = time.perf_counter()
             process_commands()
             if display.is_on: display.update()
 
-            elapsed = time.time() - previous_time
-            time.sleep(max(0, (display.ms_between_frames / 1000.0) - elapsed))
-            previous_time = time.time()
+            work_elapsed = time.perf_counter() - frame_start
+            sleep_time = max(0.0, display.frame_interval - work_elapsed)
+            if sleep_time:
+                time.sleep(sleep_time)
+
+            if display.is_on:
+                timing_totals[:4] += display.last_timings
+            timing_totals[4] += sleep_time
 
             frame_count += 1
             if frame_count == num_loops_to_update_fps:
-                print("FPS = ", round(frame_count / (time.time() - t0), 2), end='\r')
-                t0 = time.time()
+                report_elapsed = time.perf_counter() - report_start
+                averages_ms = timing_totals * (1000.0 / frame_count)
+                print(
+                    f"FPS {frame_count / report_elapsed:5.1f} | "
+                    f"shader {averages_ms[0]:5.1f} ms | "
+                    f"compose {averages_ms[1]:4.1f} ms | "
+                    f"pixels {averages_ms[2]:4.1f} ms | "
+                    f"render {averages_ms[3]:4.1f} ms | "
+                    f"sleep {averages_ms[4]:4.1f} ms",
+                    end='\r',
+                )
+                report_start = time.perf_counter()
+                timing_totals.fill(0)
                 frame_count = 0
     except KeyboardInterrupt:
         display.turn_off()
