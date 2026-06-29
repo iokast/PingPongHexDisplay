@@ -43,6 +43,12 @@ class LedStrip:
     def set_pixel_color(self, pixel_id, color32):
         ws.ws2811_led_set(self.channel, pixel_id, color32)
 
+    def set_pixel_colors(self, colors):
+        if len(colors) != self.led_count:
+            raise ValueError("Length of colors must match the number of LEDs")
+        for pixel_id, color in enumerate(colors):
+            ws.ws2811_led_set(self.channel, pixel_id, int(color))
+
     def refresh_display(self):
             resp = ws.ws2811_render(self.leds)
             if resp != ws.WS2811_SUCCESS:

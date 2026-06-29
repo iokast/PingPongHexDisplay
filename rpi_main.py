@@ -30,9 +30,10 @@ class Display():
         self.brightness_clock = brightness_clock
         self.colors_id = colors_id
         self.colors = color_palette_11[colors_id]
-        self.ms_between_frames = 30
+        self.ms_between_frames = 16
         self.is_on = True
         self.gamma_adj = np.array(gamma_adj)
+        self.state = np.zeros((397, 3), dtype=np.int16)
 
         # Setup animations
         self.background_animations = [Shader(color_palette=self.colors, alpha=self.brightness_background),
@@ -59,16 +60,17 @@ class Display():
         self.clock_animations[self.clock_animation_id].change_color_type()
 
     def update(self):
-        state = np.zeros((397, 3), dtype=int)
+        state = self.state
+        state.fill(0)
         state = self.background_animations[self.background_animation_id].update(state)
         state = self.clock_animations[self.clock_animation_id].update(state)
         state = np.clip(state, 0, 255)
         state = self.gamma_adj[state]
 
-        state_24bit = ((state[:, 1] << 16) | (state[:, 0] << 8) | state[:, 2]).tolist()
-
-        for pix_id, color in enumerate(state_24bit):
-            self.strip.set_pixel_color(pix_id, color)
+        state_24bit = ((state[:, 1].astype(np.uint32) << 16) |
+                       (state[:, 0].astype(np.uint32) << 8) |
+                       state[:, 2].astype(np.uint32))
+        self.strip.set_pixel_colors(state_24bit)
 
         self.strip.refresh_display()
 
@@ -177,5 +179,4 @@ if __name__ == '__main__':
     flask_thread.start()
 
     # Run the main OpenGL animation loop
-    display.background_animations[0].initialize_opengl()
     animation_loop()

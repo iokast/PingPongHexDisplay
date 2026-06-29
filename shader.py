@@ -20,6 +20,11 @@ class Shader:
         self.temporal_alpha = 0.35            # Lower = smoother/slower frame changes.
         self.previous_led_frame = None
 
+        # Render one fragment per LED instead of drawing an entire square image
+        # and throwing almost all of it away. Set this to False if a shader
+        # relies on screen-space derivatives or neighboring fragments.
+        self.render_leds_only = os.environ.get("PPL_FULL_FRAME_SHADER") != "1"
+
         self.shader_files = sorted([
             os.path.join("shaders", f)
             for f in os.listdir("shaders")
@@ -85,9 +90,14 @@ class Shader:
         with open(self.shader_files[self.shader_id], "r") as f:
             self.shadertoy_code = f.read()
 
+        old_program = self.shader_program
+        old_vao = self.vao
         self.shader_program = self.compile_shaders()
+        self.vao = self.create_buffer(self.shader_program)
         self.cache_uniform_locations()
         self.previous_led_frame = None
+        glDeleteVertexArrays(1, [old_vao])
+        glDeleteProgram(old_program)
 
     def set_palette(self, colors, brightness):
         if colors != self.colors:
@@ -108,6 +118,9 @@ class Shader:
         if "float jTime;" in code:
             code = code.replace("float jTime;", "float jTime = 0.0;")
 
+        if self.render_leds_only:
+            code = code.replace("gl_FragCoord.xy", "shaderFragCoord")
+
         return code
 
     def initialize_opengl(self):
@@ -126,12 +139,14 @@ class Shader:
         self.texture = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, self.texture)
 
+        output_width = len(self.pixel_map) if self.render_leds_only else self.canvas_size
+        output_height = 1 if self.render_leds_only else self.canvas_size
         glTexImage2D(
             GL_TEXTURE_2D,
             0,
             GL_RGB,
-            self.canvas_size,
-            self.canvas_size,
+            output_width,
+            output_height,
             0,
             GL_RGB,
             GL_UNSIGNED_BYTE,
@@ -181,14 +196,30 @@ class Shader:
         )
 
     def compile_shaders(self):
-        vertex_shader = """
-        #version 100
-        attribute vec2 position;
-        void main()
-        {
-            gl_Position = vec4(position,0.0,1.0);
-        }
-        """
+        if self.render_leds_only:
+            vertex_shader = """
+            #version 100
+            attribute float outputX;
+            attribute vec2 sampleCoord;
+            varying vec2 shaderFragCoord;
+            void main()
+            {
+                float x = ((outputX + 0.5) / __LED_COUNT__) * 2.0 - 1.0;
+                gl_Position = vec4(x, 0.0, 0.0, 1.0);
+                gl_PointSize = 1.0;
+                shaderFragCoord = sampleCoord;
+            }
+            """
+            vertex_shader = vertex_shader.replace("__LED_COUNT__", str(float(len(self.pixel_map))))
+        else:
+            vertex_shader = """
+            #version 100
+            attribute vec2 position;
+            void main()
+            {
+                gl_Position = vec4(position,0.0,1.0);
+            }
+            """
 
         fragment_header = """
         #version 100
@@ -205,6 +236,11 @@ class Shader:
         uniform vec3 iChannelResolution[4];
         """
 
+        if self.render_leds_only:
+            fragment_header += "varying vec2 shaderFragCoord;\n"
+
+        fragment_coordinate = "shaderFragCoord" if self.render_leds_only else "gl_FragCoord.xy"
+
         fragment_shader = (
             fragment_header +
             self.prepare_shadertoy_shader(self.shadertoy_code) +
@@ -212,7 +248,7 @@ class Shader:
             void main()
             {
                 vec4 fragColor = vec4(0.0);
-                mainImage(fragColor, gl_FragCoord.xy);
+                mainImage(fragColor, """ + fragment_coordinate + """);
                 gl_FragColor = fragColor;
             }
             """
@@ -228,6 +264,29 @@ class Shader:
             raise e
 
     def create_buffer(self, shader_program):
+        if self.render_leds_only:
+            # The previous full-frame render was flipped vertically before
+            # sampling. Convert each LED location back to OpenGL coordinates.
+            output_x = np.arange(len(self.pixel_map), dtype=np.float32)
+            sample_x = self.pixel_map[:, 0].astype(np.float32) + 0.5
+            sample_y = self.canvas_size - self.pixel_map[:, 1].astype(np.float32) - 0.5
+            vertices = np.column_stack((output_x, sample_x, sample_y)).astype(np.float32)
+
+            vao = glGenVertexArrays(1)
+            glBindVertexArray(vao)
+            vertex_buffer = glGenBuffers(1)
+            glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer)
+            glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_STATIC_DRAW)
+
+            stride = vertices.strides[0]
+            output_x_location = glGetAttribLocation(shader_program, "outputX")
+            sample_coord_location = glGetAttribLocation(shader_program, "sampleCoord")
+            glVertexAttribPointer(output_x_location, 1, GL_FLOAT, False, stride, ctypes.c_void_p(0))
+            glVertexAttribPointer(sample_coord_location, 2, GL_FLOAT, False, stride, ctypes.c_void_p(4))
+            glEnableVertexAttribArray(output_x_location)
+            glEnableVertexAttribArray(sample_coord_location)
+            return vao
+
         vertices = np.array([
             -1.0, -1.0,
              1.0, -1.0,
@@ -258,7 +317,9 @@ class Shader:
 
     def generate_frame(self):
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
-        glViewport(0, 0, self.canvas_size, self.canvas_size)
+        output_width = len(self.pixel_map) if self.render_leds_only else self.canvas_size
+        output_height = 1 if self.render_leds_only else self.canvas_size
+        glViewport(0, 0, output_width, output_height)
         glClear(GL_COLOR_BUFFER_BIT)
         glUseProgram(self.shader_program)
 
@@ -279,33 +340,37 @@ class Shader:
         self.frame += 1
 
         glBindVertexArray(self.vao)
-        glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
+        if self.render_leds_only:
+            glDrawArrays(GL_POINTS, 0, len(self.pixel_map))
+        else:
+            glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
 
+        glPixelStorei(GL_PACK_ALIGNMENT, 1)
         pixels = glReadPixels(
             0,
             0,
-            self.canvas_size,
-            self.canvas_size,
+            output_width,
+            output_height,
             GL_RGB,
             GL_UNSIGNED_BYTE
         )
 
         pixels = np.frombuffer(pixels, dtype=np.uint8)
-        pixels = pixels.reshape(self.canvas_size, self.canvas_size, 3)
-        pixels = np.flipud(pixels)
+        pixels = pixels.reshape(output_height, output_width, 3)
+
+        if self.render_leds_only:
+            pixels = pixels[0]
+        else:
+            pixels = np.flipud(pixels)
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
         return pixels
 
     def sample_led_pixels(self, frame):
-        led_frame = np.zeros((self.pixel_map.shape[0], 3), dtype=np.float32)
+        if self.render_leds_only:
+            return frame.astype(np.float32)
 
-        for led_id, xy in enumerate(self.pixel_map):
-            x = xy[0]
-            y = xy[1]
-            led_frame[led_id] = frame[y, x]
-
-        return led_frame
+        return frame[self.pixel_map[:, 1], self.pixel_map[:, 0]].astype(np.float32)
 
     def smooth_led_neighbors(self, led_frame):
         if self.neighbor_strength <= 0:
@@ -332,13 +397,9 @@ class Shader:
             self.previous_led_frame = led_frame.copy()
             return led_frame
 
-        smoothed = (
-            self.temporal_alpha * led_frame +
-            (1.0 - self.temporal_alpha) * self.previous_led_frame
-        )
-
-        self.previous_led_frame = smoothed.copy()
-        return smoothed
+        self.previous_led_frame *= 1.0 - self.temporal_alpha
+        self.previous_led_frame += self.temporal_alpha * led_frame
+        return self.previous_led_frame
 
     def update(self, state):
         frame = self.generate_frame()
