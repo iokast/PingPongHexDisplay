@@ -25,8 +25,7 @@ class SolarDimmer:
         self.transition_half_width = timedelta(hours=transition_hours / 2.0)
         self.override_seconds = override_seconds
         self.override_until = 0.0
-        self._cached_date = None
-        self._cached_events = None
+        self._event_cache = {}
 
     def start_override(self):
         self.override_until = time.monotonic() + self.override_seconds
@@ -106,13 +105,12 @@ class SolarDimmer:
         raise RuntimeError("Could not resolve solar event to the local date")
 
     def events_for_date(self, local_date):
-        if local_date != self._cached_date:
-            self._cached_events = (
+        if local_date not in self._event_cache:
+            self._event_cache[local_date] = (
                 self._event_datetime(local_date, sunrise=True),
                 self._event_datetime(local_date, sunrise=False),
             )
-            self._cached_date = local_date
-        return self._cached_events
+        return self._event_cache[local_date]
 
     @staticmethod
     def _lerp(start, end, fraction):

@@ -17,6 +17,7 @@ from threading import Thread
 from shader import Shader
 from queue import Queue
 from solar_dimmer import SolarDimmer
+from day_night import DayNight
 
 # Flask app
 app = Flask(__name__)
@@ -41,7 +42,9 @@ class Display():
         self.dimmer_brightness = 1.0
 
         # Setup animations
-        self.background_animations = [Shader(color_palette=self.colors, alpha=self.brightness_background),
+        self.shader_animation = Shader(color_palette=self.colors, alpha=self.brightness_background)
+        self.background_animations = [DayNight(color_palette=self.colors, alpha=self.brightness_background),
+                                      self.shader_animation,
                                       Expanse(color_palette=self.colors, alpha=self.brightness_background),
                                       Spin(color_palette=self.colors, alpha=self.brightness_background)]
         self.background_animation_id = 0
@@ -179,7 +182,7 @@ def process_commands():
 
 def animation_loop():
     global display
-    display.background_animations[0].initialize_opengl()
+    display.shader_animation.initialize_opengl()
     frame_count = 0
     num_loops_to_update_fps = 60
     report_start = time.perf_counter()
