@@ -22,7 +22,7 @@ from solar_dimmer import SolarDimmer
 app = Flask(__name__)
 
 class Display():
-    def __init__(self, colors_id, brightness_background=0.4, brightness_clock=0.4):
+    def __init__(self, colors_id, brightness_background=1.0, brightness_clock=0.6):
         # Setup LED Strip
         self.strip = LedStrip()
 
@@ -65,11 +65,9 @@ class Display():
         self.clock_animations[self.clock_animation_id].change_color_type()
 
     def update(self):
-        frame_start = time.perf_counter()
         state = self.state
         state.fill(0)
         state = self.background_animations[self.background_animation_id].update(state)
-        background_done = time.perf_counter()
         state = self.clock_animations[self.clock_animation_id].update(state)
         self.dimmer_brightness = self.dimmer.brightness()
         if self.dimmer_brightness != 1.0:
@@ -80,18 +78,8 @@ class Display():
         state_24bit = ((state[:, 1].astype(np.uint32) << 16) |
                        (state[:, 0].astype(np.uint32) << 8) |
                        state[:, 2].astype(np.uint32))
-        compose_done = time.perf_counter()
         self.strip.set_pixel_colors(state_24bit)
-        pixels_done = time.perf_counter()
         self.strip.refresh_display()
-        render_done = time.perf_counter()
-
-        self.last_timings = (
-            background_done - frame_start,
-            compose_done - background_done,
-            pixels_done - compose_done,
-            render_done - pixels_done,
-        )
 
     def turn_off(self):
         self.strip.turn_off()
@@ -106,11 +94,18 @@ def set_params():
     global display
     data = request.json
     if display is not None:
+        brightness_changed = False
         if "brightness_background" in data:
-            display.brightness_background = float(data["brightness_background"]) / 100
+            new_brightness = float(data["brightness_background"]) / 100
+            if not np.isclose(new_brightness, display.brightness_background):
+                display.brightness_background = new_brightness
+                brightness_changed = True
         if "brightness_clock" in data:
-            display.brightness_clock = float(data["brightness_clock"]) / 100
-        if "brightness_background" in data or "brightness_clock" in data:
+            new_brightness = float(data["brightness_clock"]) / 100
+            if not np.isclose(new_brightness, display.brightness_clock):
+                display.brightness_clock = new_brightness
+                brightness_changed = True
+        if brightness_changed:
             display.dimmer.start_override()
             display.dimmer_brightness = 1.0
         display.set_color_and_brightness()
@@ -124,6 +119,13 @@ def set_params():
         "automatic_dimmer": not display.dimmer.override_active(),
         "dimmer_brightness": display.dimmer_brightness,
     })
+
+@app.route('/dimmer_status', methods=['GET'])
+def dimmer_status():
+    status = display.dimmer.status()
+    status["background_brightness"] = display.brightness_background
+    status["clock_brightness"] = display.brightness_clock
+    return jsonify(status)
 
 @app.route('/change_colors', methods=['POST'])
 def change_colors():
@@ -181,7 +183,6 @@ def animation_loop():
     frame_count = 0
     num_loops_to_update_fps = 60
     report_start = time.perf_counter()
-    timing_totals = np.zeros(5, dtype=float)
 
     try:
         while True:
@@ -194,27 +195,18 @@ def animation_loop():
             if sleep_time:
                 time.sleep(sleep_time)
 
-            if display.is_on:
-                timing_totals[:4] += display.last_timings
-            timing_totals[4] += sleep_time
-
             frame_count += 1
             if frame_count == num_loops_to_update_fps:
                 report_elapsed = time.perf_counter() - report_start
-                averages_ms = timing_totals * (1000.0 / frame_count)
                 print(
                     f"FPS {frame_count / report_elapsed:5.1f} | "
-                    f"shader {averages_ms[0]:5.1f} ms | "
-                    f"compose {averages_ms[1]:4.1f} ms | "
-                    f"pixels {averages_ms[2]:4.1f} ms | "
-                    f"render {averages_ms[3]:4.1f} ms | "
-                    f"sleep {averages_ms[4]:4.1f} ms | "
-                    f"dim {display.dimmer_brightness * 100:3.0f}%"
-                    f"{' manual' if display.dimmer.override_active() else ' auto'}",
+                    f"background {display.brightness_background * 100:3.0f}% | "
+                    f"clock {display.brightness_clock * 100:3.0f}% | "
+                    f"dimmer {display.dimmer_brightness * 100:3.0f}% | "
+                    f"{display.dimmer.state()}",
                     end='\r',
                 )
                 report_start = time.perf_counter()
-                timing_totals.fill(0)
                 frame_count = 0
     except KeyboardInterrupt:
         display.turn_off()

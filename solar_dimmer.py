@@ -36,6 +36,11 @@ class SolarDimmer:
             monotonic_now = time.monotonic()
         return monotonic_now < self.override_until
 
+    def override_remaining(self, monotonic_now=None):
+        if monotonic_now is None:
+            monotonic_now = time.monotonic()
+        return max(0.0, self.override_until - monotonic_now)
+
     @staticmethod
     def _normalize_degrees(value):
         return value % 360.0
@@ -138,7 +143,47 @@ class SolarDimmer:
         fraction = (now - sunset_start) / (sunset_end - sunset_start)
         return self._lerp(self.day_brightness, self.night_brightness, fraction)
 
+    def state(self, now=None):
+        if self.override_active():
+            return "manual override"
+        if now is None:
+            now = datetime.now(self.timezone)
+        elif now.tzinfo is None:
+            now = now.replace(tzinfo=self.timezone)
+        else:
+            now = now.astimezone(self.timezone)
+
+        sunrise, sunset = self.events_for_date(now.date())
+        if now < sunrise - self.transition_half_width:
+            return "night stable"
+        if now < sunrise + self.transition_half_width:
+            return "brightening"
+        if now < sunset - self.transition_half_width:
+            return "day stable"
+        if now < sunset + self.transition_half_width:
+            return "dimming"
+        return "night stable"
+
     def brightness(self, now=None, monotonic_now=None):
         if self.override_active(monotonic_now):
             return 1.0
         return self.automatic_brightness(now)
+
+    def status(self, now=None):
+        if now is None:
+            now = datetime.now(self.timezone)
+        elif now.tzinfo is None:
+            now = now.replace(tzinfo=self.timezone)
+        else:
+            now = now.astimezone(self.timezone)
+        sunrise, sunset = self.events_for_date(now.date())
+        manual = self.override_active()
+        return {
+            "mode": "manual" if manual else "automatic",
+            "state": self.state(now),
+            "brightness": 1.0 if manual else self.automatic_brightness(now),
+            "override_remaining_seconds": round(self.override_remaining()),
+            "sunrise": sunrise.isoformat(),
+            "sunset": sunset.isoformat(),
+            "current_time": now.isoformat(),
+        }
