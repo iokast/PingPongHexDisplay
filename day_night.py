@@ -91,9 +91,24 @@ class DayNight:
         vertical = np.clip(self.y_norm / 0.85, 0.0, 1.0)[:, np.newaxis]
         state[:] = top + (bottom - top) * vertical
 
-    def _draw_disc(self, state, center_x, center_y, radius, color):
+    @staticmethod
+    def _smooth_array(values):
+        values = np.clip(values, 0.0, 1.0)
+        return values * values * (3.0 - 2.0 * values)
+
+    def _blend_pixels(self, state, color, coverage):
+        coverage = np.clip(coverage, 0.0, 1.0)[:, np.newaxis]
+        state[:] = state * (1.0 - coverage) + np.asarray(color) * coverage
+
+    def _disc_coverage(self, center_x, center_y, radius, edge_width=0.8):
         distance = np.sqrt((self.x - center_x) ** 2 + (self.y - center_y) ** 2)
-        state[distance <= radius] = color
+        return (radius + edge_width / 2.0 - distance) / edge_width
+
+    def _draw_disc(self, state, center_x, center_y, radius, color, edge_width=0.8):
+        coverage = self._smooth_array(
+            self._disc_coverage(center_x, center_y, radius, edge_width)
+        )
+        self._blend_pixels(state, color, coverage)
 
     def _draw_sun(self, state, now, sunrise, sunset):
         if not sunrise <= now <= sunset:
@@ -104,8 +119,10 @@ class DayNight:
         arc_height = 0.61 * (self.y_max - self.y_min)
         center_y = horizon_y - arc_height * math.sin(math.pi * progress)
 
-        self._draw_disc(state, center_x, center_y, 1.25, [255, 176, 42])
-        self._draw_disc(state, center_x, center_y, 0.65, [255, 238, 135])
+        # Same apparent radius as a full moon. The softer outer color keeps
+        # edge coverage visible without making the center look washed out.
+        self._draw_disc(state, center_x, center_y, 2.05, [255, 165, 38])
+        self._draw_disc(state, center_x, center_y, 1.45, [255, 232, 118], 0.65)
 
     @staticmethod
     def _lunar_phase(now):
@@ -139,45 +156,65 @@ class DayNight:
         dx = self.x - center_x
         dy = self.y - center_y
         radius = 2.05
-        disc = dx * dx + dy * dy <= radius * radius
-        state[disc] = [19, 24, 43]
+        disc_coverage = self._smooth_array(
+            self._disc_coverage(center_x, center_y, radius)
+        )
+        self._blend_pixels(state, [19, 24, 43], disc_coverage)
 
         phase = self._lunar_phase(now)
         illuminated = 0.5 * (1.0 - math.cos(2.0 * math.pi * phase))
         normalized_x = dx / radius
         if phase < 0.5:  # waxing: light grows from the right
-            lit = normalized_x >= 1.0 - 2.0 * illuminated
+            boundary = 1.0 - 2.0 * illuminated
+            phase_coverage = (normalized_x - boundary) / 0.28 + 0.5
         else:  # waning: light remains on the left
-            lit = normalized_x <= -1.0 + 2.0 * illuminated
-        state[disc & lit] = [205, 218, 214]
+            boundary = -1.0 + 2.0 * illuminated
+            phase_coverage = (boundary - normalized_x) / 0.28 + 0.5
+        lit_coverage = disc_coverage * self._smooth_array(phase_coverage)
+        self._blend_pixels(state, [205, 218, 214], lit_coverage)
 
     def _draw_trees(self, state, now):
         seconds = now.timestamp()
-        tree_centers = (0.18, 0.43, 0.68, 0.88)
+        sway = seconds / 14.0
 
-        # Distant, softly moving crowns.
-        for index, base_x in enumerate(tree_centers):
-            sway = 0.018 * math.sin(seconds / 11.0 + index * 1.7)
-            crown_x = base_x + sway
-            crown_y = 0.69 + 0.025 * math.sin(index * 2.1)
+        # A single unbroken treetop horizon. Everything below this edge is
+        # canopy, giving the perspective of hovering above a forest.
+        canopy_edge = (
+            0.62
+            + 0.025 * np.sin(self.x_norm * math.pi * 7.0 + sway)
+            + 0.014 * np.sin(self.x_norm * math.pi * 15.0 - sway * 0.7)
+        )
+        canopy = self.y_norm >= canopy_edge
+        depth = np.clip(
+            (self.y_norm - canopy_edge) / np.maximum(1.0 - canopy_edge, 0.01),
+            0.0,
+            1.0,
+        )
+
+        distant = np.array([31, 91, 49], dtype=float)
+        foreground = np.array([5, 31, 21], dtype=float)
+        canopy_color = distant + (foreground - distant) * depth[:, np.newaxis]
+
+        leaf_pattern = (
+            np.sin(self.x * 2.5 + self.y * 1.6 + sway * 0.35)
+            + np.sin(self.x * 4.1 - self.y * 2.2 - sway * 0.22)
+        )
+        highlight = np.clip((leaf_pattern + 0.3) * 7.0, 0.0, 13.0)
+        canopy_color[:, 1] += highlight
+        canopy_color[:, 2] += highlight * 0.35
+        state[canopy] = canopy_color[canopy]
+
+        # Rounded crowns break up the skyline while remaining connected to the
+        # solid canopy beneath them.
+        for index, base_x in enumerate((0.10, 0.29, 0.50, 0.72, 0.91)):
+            crown_x = base_x + 0.012 * math.sin(sway + index * 1.4)
+            crown_y = 0.605 + 0.018 * math.sin(index * 2.3)
             crown = (
-                ((self.x_norm - crown_x) / 0.19) ** 2
-                + ((self.y_norm - crown_y) / 0.14) ** 2
+                ((self.x_norm - crown_x) / 0.12) ** 2
+                + ((self.y_norm - crown_y) / 0.075) ** 2
                 <= 1.0
             )
-            leaf_texture = np.sin(self.x * 2.7 + self.y * 1.9 + seconds / 17.0) > 0.15
-            state[crown] = [17, 66, 39]
-            state[crown & leaf_texture] = [28, 91, 48]
-
-            trunk = (
-                (np.abs(self.x_norm - base_x) < 0.028)
-                & (self.y_norm > crown_y)
-            )
-            state[trunk] = [55, 34, 24]
-
-        # A dark foreground canopy anchors the bottom edge of the display.
-        canopy_edge = 0.83 + 0.025 * np.sin(self.x_norm * math.pi * 8.0 + seconds / 14.0)
-        state[self.y_norm >= canopy_edge] = [8, 38, 25]
+            state[crown] = [25, 82, 44]
 
     def update(self, state):
         now = self.current_time()
