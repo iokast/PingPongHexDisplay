@@ -29,7 +29,7 @@ class DayNight:
             "--test-day-night" in sys.argv
             or os.environ.get("PPL_DAY_NIGHT_TEST") == "1"
         )
-        self.time_scale = 100.0 if self.test_mode else 1.0
+        self.time_scale = 500.0 if self.test_mode else 1.0
         self.start_datetime = datetime.now(self.solar.timezone)
         self.start_monotonic = time.monotonic()
 
