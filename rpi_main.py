@@ -40,6 +40,7 @@ class Display():
         self.state = np.zeros((397, 3), dtype=np.int16)
         self.dimmer = SolarDimmer()
         self.dimmer_brightness = 1.0
+        self.dimmer_status = "animation lighting"
 
         # Setup animations
         self.shader_animation = Shader(color_palette=self.colors, alpha=self.brightness_background)
@@ -49,7 +50,11 @@ class Display():
                                       Spin(color_palette=self.colors, alpha=self.brightness_background)]
         self.background_animation_id = 0
         
-        self.clock_animations = [Clock([255, 255, 255], alpha=self.brightness_clock)]
+        self.clock_animations = [Clock(
+            [255, 255, 255],
+            alpha=self.brightness_clock,
+            clock_type=0,
+        )]
         self.clock_animation_id = 0
 
     def set_color_and_brightness(self):
@@ -70,9 +75,15 @@ class Display():
     def update(self):
         state = self.state
         state.fill(0)
-        state = self.background_animations[self.background_animation_id].update(state)
+        background = self.background_animations[self.background_animation_id]
+        state = background.update(state)
         state = self.clock_animations[self.clock_animation_id].update(state)
-        self.dimmer_brightness = self.dimmer.brightness()
+        if isinstance(background, DayNight):
+            self.dimmer_brightness = 1.0
+            self.dimmer_status = "animation lighting"
+        else:
+            self.dimmer_brightness = self.dimmer.brightness()
+            self.dimmer_status = self.dimmer.state()
         if self.dimmer_brightness != 1.0:
             state = (state * self.dimmer_brightness).astype(np.int16)
         state = np.clip(state, 0, 255)
@@ -206,7 +217,7 @@ def animation_loop():
                     f"background {display.brightness_background * 100:3.0f}% | "
                     f"clock {display.brightness_clock * 100:3.0f}% | "
                     f"dimmer {display.dimmer_brightness * 100:3.0f}% | "
-                    f"{display.dimmer.state()}",
+                    f"{display.dimmer_status}",
                     end='\r',
                 )
                 report_start = time.perf_counter()

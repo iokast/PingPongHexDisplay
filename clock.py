@@ -6,12 +6,12 @@ from datetime import datetime
 
 
 class Clock:
-    def __init__(self, color, alpha):
+    def __init__(self, color, alpha, clock_type=1):
         self.alpha = alpha
         self.original_color = color
         self.set_palette(color)
 
-        self.clock_type = 1
+        self.clock_type = clock_type
         self.clock_locs_dict = clock_positions[self.clock_type]
         self.number_of_digits = 3
         self.digits = digits[self.clock_type]
