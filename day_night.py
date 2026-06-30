@@ -87,9 +87,41 @@ class DayNight:
                 )
         return self.NIGHT_TOP, self.NIGHT_BOTTOM
 
+    def _daylight_level(self, now, sunrise, sunset):
+        """Continuous 0..1 lighting shared by all landscape elements."""
+        hour = timedelta(hours=1)
+        keyframes = [
+            (sunrise - hour, 0.0),
+            (sunrise, 0.45),
+            (sunrise + hour, 1.0),
+            (sunset - hour, 1.0),
+            (sunset, 0.42),
+            (sunset + hour, 0.0),
+        ]
+        if now <= keyframes[0][0] or now >= keyframes[-1][0]:
+            return 0.0
+        for left, right in zip(keyframes, keyframes[1:]):
+            if left[0] <= now <= right[0]:
+                fraction = (now - left[0]) / (right[0] - left[0])
+                return self._blend(left[1], right[1], fraction)
+        return 0.0
+
     def _draw_sky(self, state, top, bottom):
         vertical = np.clip(self.y_norm / 0.85, 0.0, 1.0)[:, np.newaxis]
         state[:] = top + (bottom - top) * vertical
+
+    def _draw_stars(self, state, now, daylight):
+        visibility = np.clip((0.55 - daylight) / 0.45, 0.0, 1.0)
+        if visibility <= 0.0:
+            return
+
+        pixel_ids = np.arange(len(state))
+        stars = (self.y_norm < 0.56) & (((pixel_ids * 73 + 19) % 101) < 9)
+        twinkle = 0.52 + 0.20 * np.sin(
+            now.timestamp() / 7.0 + pixel_ids * 1.91
+        )
+        coverage = np.where(stars, visibility * twinkle, 0.0)
+        self._blend_pixels(state, [135, 145, 172], coverage)
 
     @staticmethod
     def _smooth_array(values):
@@ -173,7 +205,7 @@ class DayNight:
         lit_coverage = disc_coverage * self._smooth_array(phase_coverage)
         self._blend_pixels(state, [205, 218, 214], lit_coverage)
 
-    def _draw_landscape(self, state, now):
+    def _draw_landscape(self, state, now, daylight):
         seconds = now.timestamp()
         wave_time = seconds / 2.8
         horizon = 0.59
@@ -267,15 +299,33 @@ class DayNight:
         foam_breaks = np.sin(self.y * 4.2 + self.x * 2.3 - wave_time * 2.0) > -0.55
         state[breaker & foam_breaks] = [220, 229, 211]
 
+        # Apply one coherent time-of-day grade after all landscape layers are
+        # composed. Night reduces brightness and saturation and introduces a
+        # subtle cool cast without flattening the individual materials.
+        landscape = ocean | land
+        colors = state[landscape].astype(float)
+        luminance = (
+            colors[:, 0] * 0.2126
+            + colors[:, 1] * 0.7152
+            + colors[:, 2] * 0.0722
+        )[:, np.newaxis]
+        saturation = 0.38 + 0.62 * daylight
+        colors = luminance + (colors - luminance) * saturation
+        brightness = 0.42 + 0.58 * daylight
+        night_tint = np.array([1, 4, 12], dtype=float) * (1.0 - daylight)
+        state[landscape] = np.clip(colors * brightness + night_tint, 0, 255)
+
     def update(self, state):
         now = self.current_time()
         sunrise, sunset = self.solar.events_for_date(now.date())
         top, bottom = self._sky_palette(now, sunrise, sunset)
+        daylight = self._daylight_level(now, sunrise, sunset)
 
         self._draw_sky(state, top, bottom)
+        self._draw_stars(state, now, daylight)
         self._draw_sun(state, now, sunrise, sunset)
         self._draw_moon(state, now)
-        self._draw_landscape(state, now)
+        self._draw_landscape(state, now, daylight)
 
         if self.brightness != 1.0:
             state[:] = state * self.brightness
