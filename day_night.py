@@ -173,48 +173,70 @@ class DayNight:
         lit_coverage = disc_coverage * self._smooth_array(phase_coverage)
         self._blend_pixels(state, [205, 218, 214], lit_coverage)
 
-    def _draw_trees(self, state, now):
+    def _draw_landscape(self, state, now):
         seconds = now.timestamp()
-        sway = seconds / 14.0
+        wave_time = seconds / 2.8
+        horizon = 0.61
 
-        # A single unbroken treetop horizon. Everything below this edge is
-        # canopy, giving the perspective of hovering above a forest.
-        canopy_edge = (
-            0.62
-            + 0.025 * np.sin(self.x_norm * math.pi * 7.0 + sway)
-            + 0.014 * np.sin(self.x_norm * math.pi * 15.0 - sway * 0.7)
-        )
-        canopy = self.y_norm >= canopy_edge
-        depth = np.clip(
-            (self.y_norm - canopy_edge) / np.maximum(1.0 - canopy_edge, 0.01),
-            0.0,
-            1.0,
-        )
+        # Ocean fills the entire lower view first, ensuring no sky-colored
+        # holes remain between the mountain, water, and beach.
+        ocean = self.y_norm >= horizon
+        water_depth = np.clip((self.y_norm - horizon) / (1.0 - horizon), 0.0, 1.0)
+        far_water = np.array([24, 104, 145], dtype=float)
+        near_water = np.array([5, 52, 84], dtype=float)
+        water_color = far_water + (near_water - far_water) * water_depth[:, np.newaxis]
+        shimmer = 8.0 * np.sin(self.x * 2.1 + self.y * 5.0 - wave_time * 0.35)
+        water_color[:, 1] += np.maximum(shimmer, 0.0) * 0.45
+        water_color[:, 2] += np.maximum(shimmer, 0.0)
+        state[ocean] = water_color[ocean]
 
-        distant = np.array([31, 91, 49], dtype=float)
-        foreground = np.array([5, 31, 21], dtype=float)
-        canopy_color = distant + (foreground - distant) * depth[:, np.newaxis]
-
-        leaf_pattern = (
-            np.sin(self.x * 2.5 + self.y * 1.6 + sway * 0.35)
-            + np.sin(self.x * 4.1 - self.y * 2.2 - sway * 0.22)
-        )
-        highlight = np.clip((leaf_pattern + 0.3) * 7.0, 0.0, 13.0)
-        canopy_color[:, 1] += highlight
-        canopy_color[:, 2] += highlight * 0.35
-        state[canopy] = canopy_color[canopy]
-
-        # Rounded crowns break up the skyline while remaining connected to the
-        # solid canopy beneath them.
-        for index, base_x in enumerate((0.10, 0.29, 0.50, 0.72, 0.91)):
-            crown_x = base_x + 0.012 * math.sin(sway + index * 1.4)
-            crown_y = 0.605 + 0.018 * math.sin(index * 2.3)
-            crown = (
-                ((self.x_norm - crown_x) / 0.12) ** 2
-                + ((self.y_norm - crown_y) / 0.075) ** 2
-                <= 1.0
+        # Long wave fronts travel toward shore. Their curves and broken foam
+        # pixels make the motion readable on the coarse hex lattice.
+        for index, base_y in enumerate((0.66, 0.73, 0.81)):
+            crest_y = (
+                base_y
+                + 0.018 * math.sin(wave_time + index * 2.0)
+                + 0.012 * np.sin(self.x_norm * math.pi * 5.0 - wave_time)
             )
-            state[crown] = [25, 82, 44]
+            crest = ocean & (np.abs(self.y_norm - crest_y) < 0.022)
+            broken = np.sin(self.x * 3.7 + index * 1.9 + wave_time * 1.4) > -0.25
+            state[crest & broken] = [105, 190, 210]
+
+        # A broad mountain occupies the left side. Multiple ridges add depth
+        # without requiring more resolution than the display can provide.
+        mountain_edge = (
+            0.27
+            + 0.88 * np.abs(self.x_norm - 0.16)
+            + 0.018 * np.sin(self.x_norm * math.pi * 18.0)
+        )
+        mountain = (self.x_norm < 0.61) & (self.y_norm >= mountain_edge)
+        mountain_depth = np.clip((self.y_norm - mountain_edge) / 0.55, 0.0, 1.0)
+        ridge_color = np.array([39, 70, 63], dtype=float)
+        mountain_base = np.array([15, 39, 35], dtype=float)
+        mountain_color = ridge_color + (mountain_base - ridge_color) * mountain_depth[:, np.newaxis]
+        rock_light = np.sin(self.x * 3.1 - self.y * 2.4) > 0.55
+        mountain_color[rock_light] += [10, 9, 5]
+        state[mountain] = mountain_color[mountain]
+
+        # The beach sweeps in from the lower right, with a moving foam line at
+        # the diagonal water's edge to suggest waves breaking on shore.
+        shore_y = 0.70 + 0.22 * (1.0 - self.x_norm)
+        beach = (self.x_norm > 0.46) & (self.y_norm >= shore_y)
+        sand_depth = np.clip((self.y_norm - shore_y) / 0.25, 0.0, 1.0)
+        dry_sand = np.array([205, 166, 94], dtype=float)
+        wet_sand = np.array([132, 112, 76], dtype=float)
+        sand_color = wet_sand + (dry_sand - wet_sand) * sand_depth[:, np.newaxis]
+        state[beach] = sand_color[beach]
+
+        breaker_y = shore_y - 0.018 + 0.018 * np.sin(
+            self.x_norm * math.pi * 7.0 + wave_time * 1.8
+        )
+        breaker = (
+            (self.x_norm > 0.43)
+            & (np.abs(self.y_norm - breaker_y) < 0.032)
+        )
+        foam_breaks = np.sin(self.x * 4.4 - wave_time * 2.1) > -0.45
+        state[breaker & foam_breaks] = [220, 225, 202]
 
     def update(self, state):
         now = self.current_time()
@@ -224,7 +246,7 @@ class DayNight:
         self._draw_sky(state, top, bottom)
         self._draw_sun(state, now, sunrise, sunset)
         self._draw_moon(state, now)
-        self._draw_trees(state, now)
+        self._draw_landscape(state, now)
 
         if self.brightness != 1.0:
             state[:] = state * self.brightness
