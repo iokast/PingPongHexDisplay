@@ -11,14 +11,17 @@ class Shader:
     def __init__(self, color_palette, alpha):
         self.colors = color_palette
         self.brightness = alpha
-        self.start_time = time.time()
+        self.start_time = time.monotonic()
         self.frame = 0
+        self.shader_time_wrap_seconds = 24.0 * 60.0 * 60.0
+        self.previous_shader_time = 0.0
 
         # Smoothing controls.
         self.shader_time_scale = 1.0          # Lower = slower animation.
         self.neighbor_strength = 0.0         # Higher = more spatial smoothing.
         self.temporal_alpha = 0.35            # Lower = smoother/slower frame changes.
         self.previous_led_frame = None
+        self.opengl_initialized = False
 
         # Render only the samples needed by the LEDs instead of drawing an
         # entire square image. Set this to False if a shader relies on
@@ -141,11 +144,14 @@ class Shader:
 
         old_program = self.shader_program
         old_vao = self.vao
+        old_vertex_buffer = self.vertex_buffer
         self.shader_program = self.compile_shaders()
         self.vao = self.create_buffer(self.shader_program)
         self.cache_uniform_locations()
         self.previous_led_frame = None
+        self.frame = 0
         glDeleteVertexArrays(1, [old_vao])
+        glDeleteBuffers(1, [old_vertex_buffer])
         glDeleteProgram(old_program)
 
     def set_palette(self, colors, brightness):
@@ -217,6 +223,7 @@ class Shader:
             raise RuntimeError("Framebuffer incomplete")
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        self.opengl_initialized = True
 
     def cache_uniform_locations(self):
         self.iResolution_location = glGetUniformLocation(
@@ -272,7 +279,7 @@ class Shader:
         #version 100
         precision mediump float;
         uniform vec2 iResolution;
-        uniform float iTime;
+        uniform highp float iTime;
         uniform float iTimeDelta;
         uniform int iFrame;
         uniform vec4 iMouse;
@@ -340,6 +347,7 @@ class Shader:
             vao = glGenVertexArrays(1)
             glBindVertexArray(vao)
             vertex_buffer = glGenBuffers(1)
+            self.vertex_buffer = vertex_buffer
             glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer)
             glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_STATIC_DRAW)
 
@@ -363,6 +371,7 @@ class Shader:
         glBindVertexArray(vao)
 
         vertex_buffer = glGenBuffers(1)
+        self.vertex_buffer = vertex_buffer
         glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer)
         glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_STATIC_DRAW)
 
@@ -388,7 +397,12 @@ class Shader:
         glClear(GL_COLOR_BUFFER_BIT)
         glUseProgram(self.shader_program)
 
-        elapsed = (time.time() - self.start_time) * self.shader_time_scale
+        elapsed = (
+            (time.monotonic() - self.start_time) * self.shader_time_scale
+        ) % self.shader_time_wrap_seconds
+        if elapsed < self.previous_shader_time:
+            self.frame = 0
+        self.previous_shader_time = elapsed
 
         glUniform2f(self.iResolution_location, *self.iResolution)
         glUniform1f(self.iTime_location, elapsed)
@@ -484,3 +498,14 @@ class Shader:
 
         state[:] = led_frame * self.brightness
         return state
+
+    def close(self):
+        if not self.opengl_initialized:
+            return
+        glDeleteFramebuffers(1, [self.fbo])
+        glDeleteTextures(1, [self.texture])
+        glDeleteBuffers(1, [self.vertex_buffer])
+        glDeleteVertexArrays(1, [self.vao])
+        glDeleteProgram(self.shader_program)
+        self.context.destroy()
+        self.opengl_initialized = False
