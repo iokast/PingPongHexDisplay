@@ -1,256 +1,269 @@
-# set working directory
 import os
+
 abspath = os.path.abspath(__file__)
-dname = os.path.dirname(abspath)
-os.chdir(dname)
+os.chdir(os.path.dirname(abspath))
 
 import numpy as np
-import hexy as hx
 import pygame as pg
-from text_for_hex import radial_to_irl_map
-from simulate_helpers import *
-from hex_mask import color_palette_11
-from expanse import Expanse 
+
 from clock import Clock
-from spin import Spin
+from day_night import DayNight
+from expanse import Expanse
+from hex_mask import cartesian_coords, color_palette_11, gamma_adj
 from shader import Shader
-
-class Selection:
-    class Type:
-        POINT = 0 
-        RING = 1
-        DISK = 2
-        LINE = 3
-
-        @staticmethod
-        def to_string(selection_type):
-            if selection_type == Selection.Type.DISK:
-                return "disk"
-            elif selection_type == Selection.Type.RING:
-                return "ring"
-            elif selection_type == Selection.Type.LINE:
-                return "line"
-            else:
-                return "point"
-
-    @staticmethod
-    def get_selection(selection_type, cube_mouse, rad, clicked_hex=None):
-        if selection_type == Selection.Type.DISK:
-            return hx.get_disk(cube_mouse, rad.value)
-        elif selection_type == Selection.Type.RING:
-            return hx.get_ring(cube_mouse, rad.value)
-        elif selection_type == Selection.Type.LINE:
-            return hx.get_hex_line(clicked_hex, cube_mouse)
-        else:
-            return cube_mouse.copy()
+from spin import Spin
+from solar_dimmer import SolarDimmer
 
 
-class ClampedInteger:
-    """
-    A simple class for "clamping" an integer value between a range. Its value will not increase beyond `upper_limit`
-    and will not decrease below `lower_limit`.
-    """
-    def __init__(self, initial_value, lower_limit, upper_limit):
-        self.value = initial_value
-        self.lower_limit = lower_limit
-        self.upper_limit = upper_limit
+class Simulator:
+    """Hardware-free desktop preview of the Raspberry Pi render pipeline."""
 
-    def increment(self):
-        self.value += 1
-        if self.value > self.upper_limit:
-            self.value = self.upper_limit
+    HELP_LINES = (
+        "B: next background",
+        "C: change current palette / shader",
+        "S: next shader (when Shader is active)",
+        "K: next clock style",
+        "V: next clock color mode",
+        "Up/Down: background brightness",
+        "Right/Left: clock brightness",
+        "A: toggle automatic solar dimmer preview",
+        "G: toggle hardware gamma preview",
+        "Space: pause / wake",
+        "F12: save screenshot",
+        "H: toggle this help",
+        "Q or Escape: quit",
+    )
 
-    def decrement(self):
-        self.value -= 1
-        if self.value < self.lower_limit:
-            self.value = self.lower_limit
-
-
-class CyclicInteger:
-    """
-    A simple helper class for "cycling" an integer through a range of values. Its value will be set to `lower_limit`
-    if it increases above `upper_limit`. Its value will be set to `upper_limit` if its value decreases below
-    `lower_limit`.
-    """
-    def __init__(self, initial_value, lower_limit, upper_limit):
-        self.value = initial_value
-        self.lower_limit = lower_limit
-        self.upper_limit = upper_limit
-
-    def increment(self):
-        self.value += 1
-        if self.value > self.upper_limit:
-            self.value = self.lower_limit
-
-    def decrement(self):
-        self.value -= 1
-        if self.value < self.lower_limit:
-            self.value = self.upper_limit
-
-
-class ExampleHexMap:
-    def __init__(self, size=(800, 800), hex_radius=20, caption="ExampleHexMap"):
-        self.orient = True  # True => flat top hexes
-        self.color_palette = list((np.asarray(color_palette_11[0])).astype(int))
-
-        self.alpha_bg = .8
-        self.alpha_cl = .2
-
-        self.spin = Spin(self.color_palette, self.alpha_bg)
-        self.expanse = Expanse(self.color_palette, self.alpha_bg)
-        self.clock_animation = Clock([255, 255, 255], self.alpha_cl)
-        self.time_disp = TimeDisp()
-        self.time_mat = self.time_disp.update_time_mat()
-
-        self.caption = caption
-        self.size = np.array(size)
-        self.width, self.height = self.size
-        self.center = self.size / 2
-
+    def __init__(self, size=(1240, 900), hex_radius=20, target_fps=60):
+        self.size = np.asarray(size, dtype=int)
+        self.display_size = np.array([900, self.size[1]], dtype=float)
+        self.center = self.display_size / 2
         self.hex_radius = hex_radius
+        self.dot_radius = max(2, int(hex_radius * 0.82))
+        self.target_fps = target_fps
+        self.running = True
+        self.is_on = True
+        self.show_help = True
+        # The Pi's LED gamma LUT looks unnaturally dark on an already
+        # gamma-corrected desktop monitor. It remains available with G.
+        self.apply_gamma = False
+        self.auto_dimmer = True
 
-        self.hex_map = hx.HexMap()
-        self.max_coord = 11 # This is the hex radius
+        self.brightness_background = 1.0
+        self.brightness_clock = 0.6
+        self.colors_id = 0
+        self.colors = color_palette_11[self.colors_id]
+        self.gamma_adj = np.asarray(gamma_adj)
+        self.state = np.zeros((397, 3), dtype=np.int16)
+        self.display_state = np.zeros((397, 3), dtype=np.uint8)
 
-        self.rad = ClampedInteger(3, 1, 5)
+        self.dimmer = SolarDimmer()
+        self.dimmer_brightness = 1.0
+        self.dimmer_status = "animation lighting"
 
-        # self.selected_hex_image = make_hex_surface(
-        #         (128, 128, 128, 160),
-        #         self.hex_radius,
-        #         (255, 255, 255),
-        #         hollow=True)
+        self._init_pygame()
+        self._build_pixel_positions()
 
-        hx.set_orientation(self.orient)
+        self.shader_animation = Shader(self.colors, self.brightness_background)
+        self.background_animations = [
+            DayNight(self.colors, self.brightness_background),
+            self.shader_animation,
+            Expanse(self.colors, self.brightness_background),
+            Spin(self.colors, self.brightness_background),
+        ]
+        self.background_animation_id = 0
+        self.clock_animation = Clock(
+            [255, 255, 255],
+            alpha=self.brightness_clock,
+            clock_type=0,
+        )
 
-        self.selection_type = CyclicInteger(3, 0, 3)
-        self.clicked_hex = np.array([0, 0, 0])
+        # Keep shader behavior identical to the Pi and ready for instant
+        # background switching, while importing no LED/native Pi modules.
+        self.shader_animation.initialize_opengl()
+        self.print_controls()
 
-        # Get all possible coordinates within `self.max_coord` as radius.
-        spiral_coordinates = hx.get_spiral(np.array((0, 0, 0)), 1, self.max_coord)
+    @property
+    def active_animation(self):
+        return self.background_animations[self.background_animation_id]
 
-        # Convert `spiral_coordinates` to axial coordinates
-        hexes = {}
-        axial_coordinates = hx.cube_to_axial(spiral_coordinates)
+    @property
+    def active_animation_name(self):
+        return type(self.active_animation).__name__
 
-        for i, axial in enumerate(axial_coordinates):
-            hex_color = self.color_palette[0]
-            hexes[radial_to_irl_map[i]] = ExampleHex(axial, hex_color, hex_radius)
-
-        self.hex_map = hexes
-
-        for i, hexagon in enumerate(list(self.hex_map.values())):
-            hexagon.ring = int(np.max(abs(hexagon.cube_coordinates)))
-
-        # self.banner_coords = get_banner_loc(self.hex_map, self.max_coord)
-        # self.hourglass = HourGlass(self.hex_map, self.max_coord)
-
-        # pygame specific variables
-        self.main_surf = None
-        self.font = None
-        self.clock = None
-        self.init_pg()
-
-        self.shader = Shader(self.color_palette, self.alpha_bg)
-        self.shader.initialize_opengl()
-
-
-
-        self.color_bins = {}
-        for i in range(len(self.color_palette)):
-            if i == 0:
-                self.color_bins[i] = set(range(397))
-            else:
-                self.color_bins[i] = set()
-
-    def update_sim(self):
-        state = np.zeros((397,3), dtype=int)
-        # state = self.expanse.update(state)
-        # state = self.spin.update(state)
-        state = self.shader.update(state)
-        state = self.clock_animation.update(state)
-        state = np.clip(state, 0, 255)
-        
-        for pix_id, color in enumerate(state):
-            self.hex_map[pix_id].change_color(color)
-
-    def init_pg(self):
+    def _init_pygame(self):
         pg.init()
-        self.main_surf = pg.display.set_mode(self.size)
-        self.main_surf.fill('black')
-        pg.display.set_caption(self.caption)
+        self.surface = pg.display.set_mode(self.size)
+        self.frame_clock = pg.time.Clock()
+        self.font = pg.font.SysFont("Consolas", 12)
 
-        pg.font.init()
-        self.font = pg.font.SysFont("Arial", 14, True)
-        self.clock = pg.time.Clock()
+    def _build_pixel_positions(self):
+        # cartesian_coords is the authoritative physical LED layout. Its
+        # columns are (y, x); converting to screen (x, y) already places the
+        # intended point at 12 o'clock.
+        positions = np.column_stack((cartesian_coords[:, 1], cartesian_coords[:, 0]))
+        positions -= (positions.min(axis=0) + positions.max(axis=0)) / 2.0
+
+        span = positions.max(axis=0) - positions.min(axis=0)
+        available = self.display_size * 0.86
+        scale = np.min(available / span)
+        self.pixel_positions = positions * scale + self.center
+        self.dot_radius = max(2, int(scale * 0.43))
+
+    def print_controls(self):
+        print("Desktop display simulator controls:")
+        for line in self.HELP_LINES:
+            print("  " + line)
+
+    def set_background_brightness(self, change):
+        self.brightness_background = float(np.clip(
+            self.brightness_background + change, 0.0, 1.0
+        ))
+        for animation in self.background_animations:
+            animation.set_brightness(self.brightness_background)
+        self.dimmer.start_override()
+
+    def set_clock_brightness(self, change):
+        self.brightness_clock = float(np.clip(
+            self.brightness_clock + change, 0.0, 1.0
+        ))
+        self.clock_animation.set_brightness(self.brightness_clock)
+        self.dimmer.start_override()
+
+    def change_background(self):
+        self.background_animation_id = (
+            self.background_animation_id + 1
+        ) % len(self.background_animations)
+
+    def change_current_color_or_shader(self):
+        animation = self.active_animation
+        if isinstance(animation, Shader):
+            animation.change_shader()
+            return
+        if isinstance(animation, DayNight):
+            return
+        self.colors_id = (self.colors_id + 1) % len(color_palette_11)
+        self.colors = color_palette_11[self.colors_id]
+        animation.set_palette(self.colors, self.brightness_background)
+
+    def handle_key(self, key):
+        if key in (pg.K_ESCAPE, pg.K_q):
+            self.running = False
+        elif key == pg.K_b:
+            self.change_background()
+        elif key == pg.K_c:
+            self.change_current_color_or_shader()
+        elif key == pg.K_s and isinstance(self.active_animation, Shader):
+            self.shader_animation.change_shader()
+        elif key == pg.K_k:
+            self.clock_animation.change_type()
+        elif key == pg.K_v:
+            self.clock_animation.change_color_type()
+        elif key == pg.K_UP:
+            self.set_background_brightness(0.05)
+        elif key == pg.K_DOWN:
+            self.set_background_brightness(-0.05)
+        elif key == pg.K_RIGHT:
+            self.set_clock_brightness(0.05)
+        elif key == pg.K_LEFT:
+            self.set_clock_brightness(-0.05)
+        elif key == pg.K_a:
+            self.auto_dimmer = not self.auto_dimmer
+        elif key == pg.K_g:
+            self.apply_gamma = not self.apply_gamma
+        elif key == pg.K_SPACE:
+            self.is_on = not self.is_on
+        elif key == pg.K_h:
+            self.show_help = not self.show_help
+        elif key == pg.K_F12:
+            pg.image.save(self.surface, "simulator_screenshot.png")
 
     def handle_events(self):
-        running = True
         for event in pg.event.get():
             if event.type == pg.QUIT:
-                running = False
+                self.running = False
+            elif event.type == pg.KEYDOWN:
+                self.handle_key(event.key)
 
-            if event.type == pg.KEYDOWN:
-                if event.key == pg.K_ESCAPE or event.key == pg.K_q:
-                    print('escape')
-                    running = False 
-                if event.key == pg.K_UP:
-                    print('change shader')
-                    self.shader.change_shader()
-                if event.key == pg.K_RIGHT:
-                    self.shader.blur_sigma = (self.shader.blur_sigma + .5)
-                    print('change blur sigma: ', self.shader.blur_sigma)
-                if event.key == pg.K_LEFT:
-                    self.shader.blur_sigma = max(0, (self.shader.blur_sigma - .5))
-                    print('change blur sigma: ', self.shader.blur_sigma)
+    def update(self):
+        if not self.is_on:
+            self.display_state.fill(0)
+            return
 
-        return running
+        state = self.state
+        state.fill(0)
+        background = self.active_animation
+        state = background.update(state)
+        state = self.clock_animation.update(state)
 
-    def main_loop(self):
-        running = self.handle_events()
+        if isinstance(background, DayNight) or not self.auto_dimmer:
+            self.dimmer_brightness = 1.0
+            self.dimmer_status = (
+                "animation lighting" if isinstance(background, DayNight)
+                else "dimmer disabled"
+            )
+        else:
+            self.dimmer_brightness = self.dimmer.brightness()
+            self.dimmer_status = self.dimmer.state()
+        if self.dimmer_brightness != 1.0:
+            state = (state * self.dimmer_brightness).astype(np.int16)
 
-        return running
-    
+        state = np.clip(state, 0, 255).astype(np.int16)
+        if self.apply_gamma:
+            state = self.gamma_adj[state]
+        self.display_state[:] = state.astype(np.uint8)
+
+    def status_text(self):
+        details = self.active_animation_name
+        if isinstance(self.active_animation, Shader):
+            details += f" / {self.shader_animation.current_shader_name}"
+        return (
+            f"{self.frame_clock.get_fps():4.1f} FPS | {details} | "
+            f"BG {self.brightness_background * 100:.0f}% | "
+            f"Clock {self.brightness_clock * 100:.0f}% | "
+            f"Dim {self.dimmer_brightness * 100:.0f}% {self.dimmer_status} | "
+            f"Gamma {'on' if self.apply_gamma else 'off'}"
+        )
+
     def draw(self):
-        # show all hexes
-        hexagons = list(self.hex_map.values())
-        hex_positions = np.array([hexagon.get_draw_position() for hexagon in hexagons])
-        sorted_indexes = np.argsort(hex_positions[:, 1])
+        self.surface.fill((5, 5, 8))
+        for pixel_id, position in enumerate(self.pixel_positions):
+            color = tuple(int(value) for value in self.display_state[pixel_id])
+            pg.draw.circle(self.surface, color, position.astype(int), self.dot_radius)
 
-        # draws colored hex
-        for index in sorted_indexes:
-            self.main_surf.blit(hexagons[index].image, hex_positions[index] + self.center)
+        if self.show_help:
+            panel_x = int(self.display_size[0] + 8)
+            panel_width = int(self.size[0] - panel_x - 8)
+            overlay = pg.Surface(
+                (panel_width, 28 + len(self.HELP_LINES) * 16),
+                pg.SRCALPHA,
+            )
+            overlay.fill((12, 12, 16, 235))
+            overlay.blit(self.font.render("Controls", True, (255, 255, 255)), (12, 8))
+            for index, line in enumerate(self.HELP_LINES):
+                text = self.font.render(line, True, (215, 215, 220))
+                overlay.blit(text, (10, 28 + index * 16))
+            self.surface.blit(overlay, (panel_x, 12))
 
+        pg.display.set_caption(self.status_text())
+        pg.display.flip()
 
-        # # draw numbers on the hexes
-        # # print("num hex ", len(list(self.hex_map.values())))
-        # for i, hexagon in self.hex_map.items():
-        #     text = self.font.render(str(i), False, (0, 0, 0))
-        #     text.set_alpha(160)
-        #     text_pos = hexagon.get_position() + self.center
-        #     text_pos -= (text.get_width() / 2, text.get_height() / 2)
-        #     self.main_surf.blit(text, text_pos)
+    def close(self):
+        try:
+            self.shader_animation.close()
+        finally:
+            pg.quit()
 
-        # Update screen at 10 frames per second
-        pg.display.update()
-        self.clock.tick(10)
-
-    def draw_hex(self, hexagon):
-        self.main_surf.blit(self.selected_hex_image, hexagon.get_draw_position() + self.center)
-
-    def quit_app(self):
-        pg.quit()
-        raise SystemExit
-
-if __name__ == '__main__':    
-    example_hex_map = ExampleHexMap()
-
-    if True:
-        # print("num hex ", len(list(example_hex_map.hex_map.values())))
-        while example_hex_map.main_loop():
-            example_hex_map.update_sim()
-            example_hex_map.draw()
-    else:
-        display_leds(example_hex_map)
+    def run(self):
+        try:
+            while self.running:
+                self.handle_events()
+                self.update()
+                self.draw()
+                self.frame_clock.tick(self.target_fps)
+        finally:
+            self.close()
 
 
-    example_hex_map.quit_app()
+if __name__ == "__main__":
+    Simulator().run()
