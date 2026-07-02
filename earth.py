@@ -84,6 +84,8 @@ class Earth:
         self._last_update_time = self.start_time
         self._animation_elapsed = 0.0
         self.rotation_rate = 1.0
+        self._sun_cache_minute = None
+        self._sun_cache_position = None
         self.rotation_seconds = float(os.environ.get(
             "PPL_EARTH_ROTATION_SECONDS", "120"
         ))
@@ -105,6 +107,7 @@ class Earth:
         self.star_y = rng.uniform(self.y.min() + 0.5, self.y.max() - 0.5, 18)
         self.star_arc_phase = rng.uniform(0.0, 2.0 * math.pi, 18)
         self.star_strength = rng.uniform(0.55, 1.0, 18)
+        self._build_geography_lookup()
 
     def set_palette(self, color_palette, alpha):
         self.brightness = alpha
@@ -154,7 +157,15 @@ class Earth:
         longitude = (longitude + 180.0) % 360.0 - 180.0
         return longitude, math.degrees(declination)
 
-    def _city_lights(self, longitude, latitude):
+    def _current_sun_position(self):
+        now = datetime.now(timezone.utc)
+        minute = (now.year, now.timetuple().tm_yday, now.hour, now.minute)
+        if minute != self._sun_cache_minute:
+            self._sun_cache_minute = minute
+            self._sun_cache_position = self._sun_position(now)
+        return self._sun_cache_position
+
+    def _city_lights_geometric(self, longitude, latitude):
         lights = np.zeros(longitude.shape, dtype=bool)
         for city_longitude, city_latitude in self.CITY_CENTERS:
             longitude_delta = (
@@ -166,6 +177,28 @@ class Earth:
             )
             lights |= distance_squared < 4.5 ** 2
         return lights
+
+    def _build_geography_lookup(self):
+        """Rasterize static geography once instead of testing it every frame."""
+        longitude_axis = np.arange(-180.0, 180.0, 1.0)
+        latitude_axis = np.arange(-90.0, 91.0, 1.0)
+        longitude, latitude = np.meshgrid(longitude_axis, latitude_axis)
+        self._land_lookup = self._land_mask_geometric(longitude, latitude)
+        self._city_lookup = self._city_lights_geometric(longitude, latitude)
+
+    @staticmethod
+    def _lookup_indices(longitude, latitude):
+        longitude_index = np.rint(longitude + 180.0).astype(np.int16) % 360
+        latitude_index = np.clip(
+            np.rint(latitude + 90.0).astype(np.int16), 0, 180
+        )
+        return longitude_index, latitude_index
+
+    def _city_lights(self, longitude, latitude):
+        longitude_index, latitude_index = self._lookup_indices(
+            longitude, latitude
+        )
+        return self._city_lookup[latitude_index, longitude_index]
 
     @staticmethod
     def _smoothstep(value):
@@ -247,13 +280,19 @@ class Earth:
             x1, y1 = x2, y2
         return inside
 
-    def _land_mask(self, longitude, latitude):
+    def _land_mask_geometric(self, longitude, latitude):
         land = latitude < -68.0  # simplified Antarctica
         for polygon in self.CONTINENTS:
             land |= self._points_in_polygon(longitude, latitude, polygon)
         for polygon in self.WATER_CUTOUTS:
             land &= ~self._points_in_polygon(longitude, latitude, polygon)
         return land
+
+    def _land_mask(self, longitude, latitude):
+        longitude_index, latitude_index = self._lookup_indices(
+            longitude, latitude
+        )
+        return self._land_lookup[latitude_index, longitude_index]
 
     def _background(self, elapsed):
         state = np.tile(np.array([1.0, 2.0, 9.0]), (len(self.x), 1))
@@ -346,7 +385,7 @@ class Earth:
         clouds = on_globe & (cloud_pattern > 1.45) & (np.abs(latitude) < 65.0)
         sample_color[clouds] = sample_color[clouds] * 0.70 + 255.0 * 0.30
 
-        sun_longitude, sun_latitude = self._sun_position()
+        sun_longitude, sun_latitude = self._current_sun_position()
         latitude_radians = np.radians(latitude)
         sun_latitude_radians = math.radians(sun_latitude)
         solar_cosine = (
