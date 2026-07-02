@@ -48,6 +48,7 @@ class Simulator:
         # gamma-corrected desktop monitor. It remains available with G.
         self.apply_gamma = False
         self.auto_dimmer = True
+        self.status_message = "Ready"
 
         self.brightness_background = 1.0
         self.brightness_clock = 0.6
@@ -71,7 +72,7 @@ class Simulator:
             Expanse(self.colors, self.brightness_background),
             Spin(self.colors, self.brightness_background),
         ]
-        self.background_animation_id = 0
+        self.background_animation_id = 1
         self.clock_animation = Clock(
             [255, 255, 255],
             alpha=self.brightness_clock,
@@ -134,17 +135,35 @@ class Simulator:
         self.background_animation_id = (
             self.background_animation_id + 1
         ) % len(self.background_animations)
+        self.status_message = f"Switched to {self.active_animation_name}"
 
     def change_current_color_or_shader(self):
         animation = self.active_animation
         if isinstance(animation, Shader):
-            animation.change_shader()
+            self.change_shader_safely()
             return
         if isinstance(animation, DayNight):
             return
         self.colors_id = (self.colors_id + 1) % len(color_palette_11)
         self.colors = color_palette_11[self.colors_id]
         animation.set_palette(self.colors, self.brightness_background)
+        self.status_message = f"Palette {self.colors_id} selected"
+
+    def change_shader_safely(self):
+        previous_name = self.shader_animation.current_shader_name
+        try:
+            self.shader_animation.change_shader()
+        except Exception as exc:
+            self.status_message = f"Shader error: {str(exc).splitlines()[0]}"
+            print(f"Failed to change from {previous_name}:\n{exc}")
+            return False
+        if "iChannel" in self.shader_animation.shadertoy_code:
+            self.status_message = (
+                f"Loaded {self.shader_animation.current_shader_name} (channel input unavailable)"
+            )
+        else:
+            self.status_message = f"Loaded {self.shader_animation.current_shader_name}"
+        return True
 
     def handle_key(self, key):
         if key in (pg.K_ESCAPE, pg.K_q):
@@ -154,7 +173,7 @@ class Simulator:
         elif key == pg.K_c:
             self.change_current_color_or_shader()
         elif key == pg.K_s and isinstance(self.active_animation, Shader):
-            self.shader_animation.change_shader()
+            self.change_shader_safely()
         elif key == pg.K_k:
             self.clock_animation.change_type()
         elif key == pg.K_v:
@@ -235,14 +254,20 @@ class Simulator:
             panel_x = int(self.display_size[0] + 8)
             panel_width = int(self.size[0] - panel_x - 8)
             overlay = pg.Surface(
-                (panel_width, 28 + len(self.HELP_LINES) * 16),
+                (panel_width, 82 + len(self.HELP_LINES) * 16),
                 pg.SRCALPHA,
             )
             overlay.fill((12, 12, 16, 235))
-            overlay.blit(self.font.render("Controls", True, (255, 255, 255)), (12, 8))
+            current = self.active_animation_name
+            if isinstance(self.active_animation, Shader):
+                current += f": {self.shader_animation.current_shader_name}"
+            overlay.blit(self.font.render("Current animation", True, (170, 190, 255)), (10, 8))
+            overlay.blit(self.font.render(current, True, (255, 255, 255)), (10, 25))
+            overlay.blit(self.font.render(self.status_message, True, (190, 205, 190)), (10, 44))
+            overlay.blit(self.font.render("Controls", True, (170, 190, 255)), (10, 65))
             for index, line in enumerate(self.HELP_LINES):
                 text = self.font.render(line, True, (215, 215, 220))
-                overlay.blit(text, (10, 28 + index * 16))
+                overlay.blit(text, (10, 82 + index * 16))
             self.surface.blit(overlay, (panel_x, 12))
 
         pg.display.set_caption(self.status_text())

@@ -36,12 +36,17 @@ class Shader:
             os.environ.get("PPL_SUPERSAMPLE", "1") != "0"
         )
         self.sample_radius = float(os.environ.get("PPL_SAMPLE_RADIUS", "0.45"))
-        self.shader_zoom = float(os.environ.get("PPL_SHADER_ZOOM", "1.1"))
+        self.shader_zoom = float(os.environ.get("PPL_SHADER_ZOOM", "1.0"))
         self.sample_offsets = self.build_sample_offsets()
         self.heavy_shaders = {
+            "301s_fire_shader.fs",
             "cineshader_laval.fs",
             "flame.fs",
             "protean_clouds.fs",
+        }
+        self.high_precision_shaders = {
+            "301s_fire_shader.fs",
+            "cineshader_laval.fs",
         }
 
         self.shader_files = sorted([
@@ -90,6 +95,11 @@ class Shader:
             requested = int(os.environ.get("PPL_HEAVY_SAMPLES", "4"))
             return requested if requested in (4, 7) else 4
         return len(self.sample_offsets)
+
+    @property
+    def fragment_precision(self):
+        shader_name = os.path.basename(self.shader_files[self.shader_id])
+        return "highp" if shader_name in self.high_precision_shaders else "mediump"
 
     def build_neighbor_map(self):
         self.neighbor_ids = []
@@ -289,7 +299,7 @@ class Shader:
 
         fragment_header = """
         #version 100
-        precision mediump float;
+        precision __FLOAT_PRECISION__ float;
         uniform vec2 iResolution;
         uniform highp float iTime;
         uniform float iTimeDelta;
@@ -301,6 +311,10 @@ class Shader:
         uniform sampler2D iChannel3;
         uniform vec3 iChannelResolution[4];
         """
+        fragment_header = fragment_header.replace(
+            "__FLOAT_PRECISION__",
+            self.fragment_precision,
+        )
 
         if self.render_leds_only:
             fragment_header += "varying vec2 shaderFragCoord;\n"
