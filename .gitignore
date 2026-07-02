@@ -98,3 +98,14 @@ shaders/plasma_globe.fs
 shaders/pyroclastic_fireball.fs
 shaders/shield.fs
 shaders/simple_lava_lamp.fs
+__pycache__/clock.cpython-313.pyc
+__pycache__/day_night.cpython-313.pyc
+__pycache__/expanse.cpython-313.pyc
+__pycache__/hex_mask.cpython-313.pyc
+__pycache__/hex_mask.cpython-314.pyc
+__pycache__/shader.cpython-313.pyc
+__pycache__/simulate_helpers.cpython-313.pyc
+__pycache__/simulate_main.cpython-313.pyc
+__pycache__/solar_dimmer.cpython-313.pyc
+__pycache__/spin.cpython-313.pyc
+__pycache__/text_for_hex.cpython-313.pyc

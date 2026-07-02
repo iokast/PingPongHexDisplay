@@ -9,6 +9,7 @@ import pygame as pg
 from clock import Clock
 from day_night import DayNight
 from expanse import Expanse
+from earth import Earth
 from hex_mask import cartesian_coords, color_palette_11, gamma_adj
 from shader import Shader
 from spin import Spin
@@ -71,6 +72,7 @@ class Simulator:
             self.shader_animation,
             Expanse(self.colors, self.brightness_background),
             Spin(self.colors, self.brightness_background),
+            Earth(self.colors, self.brightness_background),
         ]
         self.background_animation_id = 1
         self.clock_animation = Clock(
@@ -142,7 +144,7 @@ class Simulator:
         if isinstance(animation, Shader):
             self.change_shader_safely()
             return
-        if isinstance(animation, DayNight):
+        if isinstance(animation, (DayNight, Earth)):
             return
         self.colors_id = (self.colors_id + 1) % len(color_palette_11)
         self.colors = color_palette_11[self.colors_id]

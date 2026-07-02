@@ -19,6 +19,7 @@ from shader import Shader
 from queue import Empty, Queue
 from solar_dimmer import SolarDimmer
 from day_night import DayNight
+from earth import Earth
 
 # Flask app
 app = Flask(__name__)
@@ -48,7 +49,8 @@ class Display():
         self.background_animations = [DayNight(color_palette=self.colors, alpha=self.brightness_background),
                                       self.shader_animation,
                                       Expanse(color_palette=self.colors, alpha=self.brightness_background),
-                                      Spin(color_palette=self.colors, alpha=self.brightness_background)]
+                                      Spin(color_palette=self.colors, alpha=self.brightness_background),
+                                      Earth(color_palette=self.colors, alpha=self.brightness_background)]
         self.background_animation_id = 0
         
         self.clock_animations = [Clock(
@@ -86,7 +88,7 @@ class Display():
                 "action": "shader updated",
                 "shader": animation.current_shader_name,
             }
-        if isinstance(animation, DayNight):
+        if isinstance(animation, (DayNight, Earth)):
             return {
                 "action": "no palette change",
                 "animation": self.active_animation_name,
