@@ -11,6 +11,8 @@ from hex_mask import cartesian_coords
 class Earth:
     """A readable, antialiased rotating globe rendered on the LED lattice."""
 
+    CLOSEUP_LATITUDE = 20.0
+
     CONTINENTS = (
         # North America
         ((-168, 72), (-150, 70), (-137, 60), (-128, 55), (-124, 48),
@@ -35,9 +37,14 @@ class Earth:
          (72, 25), (60, 30), (48, 29), (40, 40), (30, 42),
          (21, 36), (12, 42), (2, 43)),
         # Africa
-        ((-17, 36), (-5, 37), (10, 36), (25, 32), (34, 29), (43, 12),
-         (51, 10), (44, -12), (40, -23), (31, -34), (18, -35),
-         (12, -27), (4, -20), (0, -5), (-10, 5), (-17, 18)),
+        ((-17, 37), (-10, 36), (-6, 35), (-2, 36), (4, 37),
+         (10, 37), (15, 33), (22, 32), (29, 31), (33, 28),
+         (35, 23), (39, 16), (43, 12), (51, 11), (49, 7),
+         (45, 2), (42, -1), (41, -10), (40, -16), (36, -22),
+         (33, -27), (28, -34), (23, -35), (18, -34), (15, -29),
+         (12, -24), (9, -18), (6, -12), (2, -6), (0, 5),
+         (-5, 5), (-8, 7), (-13, 8), (-16, 13), (-17, 21),
+         (-13, 28), (-10, 31)),
         # Arabian peninsula
         ((34, 30), (48, 30), (57, 23), (51, 13), (43, 12), (36, 20)),
         # India and southeast Asia
@@ -64,6 +71,36 @@ class Earth:
         ((27, 47), (42, 47), (42, 41), (29, 41)),                 # Black Sea
     )
 
+    # Broad geographic regions, simplified for readability on 397 LEDs.
+    DESERT_REGIONS = (
+        ((-17, 15), (-12, 29), (5, 36), (28, 33), (36, 22),
+         (25, 14), (5, 12)),                                      # Sahara
+        ((35, 17), (43, 30), (56, 27), (58, 18), (50, 12)),       # Arabian
+        ((55, 35), (68, 47), (83, 47), (91, 38), (78, 30)),       # Central Asia
+        ((87, 38), (102, 47), (113, 45), (108, 36), (94, 35)),    # Gobi
+        ((114, -20), (127, -14), (145, -20), (145, -34),
+         (128, -35), (116, -29)),                                 # Australia
+        ((-118, 31), (-104, 31), (-103, 40), (-114, 43)),         # SW North America
+        ((-76, -15), (-68, -17), (-69, -28), (-73, -30)),         # Atacama
+        ((11, -16), (22, -17), (25, -29), (15, -30)),             # Kalahari
+        ((11, -18), (17, -20), (16, -29), (12, -29)),             # Namib
+    )
+
+    MOUNTAIN_REGIONS = (
+        ((-81, 8), (-75, 12), (-68, -18), (-67, -55),
+         (-73, -43), (-76, -15)),                                 # Andes
+        ((-130, 55), (-121, 50), (-108, 31), (-103, 28),
+         (-110, 44), (-119, 58)),                                 # Rockies
+        ((-10, 31), (0, 36), (10, 35), (1, 29)),                  # Atlas
+        ((5, 44), (17, 48), (16, 45), (7, 42)),                   # Alps
+        ((35, 39), (50, 43), (58, 35), (45, 32)),                 # Caucasus/Zagros
+        ((67, 37), (78, 37), (96, 29), (103, 27), (91, 35),
+         (76, 42)),                                                # Himalaya/Tibet
+        ((137, 34), (145, 45), (142, 31)),                         # Japan
+        ((145, -17), (153, -27), (149, -38), (143, -32)),         # Eastern Australia
+        ((166, -34), (179, -39), (174, -47), (168, -44)),         # New Zealand Alps
+    )
+
     LIGHTING_MODES = ("day & night", "day only", "night only")
 
     # Major population centers, intentionally consolidated and slightly
@@ -76,6 +113,25 @@ class Earth:
         (72.9, 19.1), (77.2, 28.6), (90.4, 23.8), (100.5, 13.8),
         (103.8, 1.3), (106.8, -6.2), (116.4, 39.9), (121.5, 31.2),
         (139.7, 35.7), (127.0, 37.6), (151.2, -33.9), (144.9, -37.8),
+    )
+
+    SECONDARY_CITY_CENTERS = (
+        (-123.1, 49.3), (-122.3, 47.6), (-112.1, 33.4), (-104.9, 39.7),
+        (-97.7, 30.3), (-95.4, 29.8), (-90.1, 29.9), (-84.4, 33.8),
+        (-80.2, 25.8), (-79.4, 43.7), (-73.6, 45.5), (-70.7, -33.5),
+        (-77.0, -12.0), (-74.1, 4.7), (-43.2, -22.9), (-38.5, -12.9),
+        (-3.7, 40.4), (12.5, 41.9), (18.1, 59.3), (24.9, 60.2),
+        (21.0, 52.2), (14.4, 50.1), (19.0, 47.5), (23.7, 38.0),
+        (29.0, 41.0), (44.4, 33.3), (46.7, 24.7), (32.6, 15.5),
+        (-7.6, 33.6), (-4.0, 5.3), (7.5, 9.1), (15.3, -4.3),
+        (32.6, 0.3), (36.8, -1.3), (38.8, 9.0), (39.3, -6.8),
+        (28.0, -26.2), (18.4, -33.9), (73.0, 33.7), (74.4, 31.5),
+        (67.0, 24.9), (80.3, 13.1), (77.6, 13.0), (88.4, 22.6),
+        (96.2, 16.9), (105.8, 21.0), (106.7, 10.8), (101.7, 3.1),
+        (114.2, 22.3), (113.3, 23.1), (104.1, 30.7), (106.6, 29.6),
+        (114.3, 30.6), (120.2, 30.3), (117.2, 39.1), (126.5, 43.8),
+        (121.5, 25.0), (135.5, 34.7), (136.9, 35.2), (130.4, 33.6),
+        (141.4, 43.1), (153.0, -27.5), (115.9, -31.9), (174.8, -36.9),
     )
 
     def __init__(self, color_palette=None, alpha=1.0):
@@ -166,16 +222,22 @@ class Earth:
         return self._sun_cache_position
 
     def _city_lights_geometric(self, longitude, latitude):
-        lights = np.zeros(longitude.shape, dtype=bool)
-        for city_longitude, city_latitude in self.CITY_CENTERS:
-            longitude_delta = (
-                longitude - city_longitude + 180.0
-            ) % 360.0 - 180.0
-            distance_squared = (
-                (longitude_delta * math.cos(math.radians(city_latitude))) ** 2
-                + (latitude - city_latitude) ** 2
-            )
-            lights |= distance_squared < 4.5 ** 2
+        lights = np.zeros(longitude.shape, dtype=float)
+        city_groups = (
+            (self.CITY_CENTERS, 4.5, 1.0),
+            (self.SECONDARY_CITY_CENTERS, 3.0, 0.42),
+        )
+        for cities, radius, strength in city_groups:
+            for city_longitude, city_latitude in cities:
+                longitude_delta = (
+                    longitude - city_longitude + 180.0
+                ) % 360.0 - 180.0
+                distance = np.sqrt(
+                    (longitude_delta * math.cos(math.radians(city_latitude))) ** 2
+                    + (latitude - city_latitude) ** 2
+                )
+                glow = strength * np.clip(1.0 - distance / radius, 0.0, 1.0)
+                np.maximum(lights, glow, out=lights)
         return lights
 
     def _build_geography_lookup(self):
@@ -185,6 +247,18 @@ class Earth:
         longitude, latitude = np.meshgrid(longitude_axis, latitude_axis)
         self._land_lookup = self._land_mask_geometric(longitude, latitude)
         self._city_lookup = self._city_lights_geometric(longitude, latitude)
+        self._desert_lookup = self._region_mask(
+            longitude, latitude, self.DESERT_REGIONS
+        ) & self._land_lookup
+        self._mountain_lookup = self._region_mask(
+            longitude, latitude, self.MOUNTAIN_REGIONS
+        ) & self._land_lookup
+
+    def _region_mask(self, longitude, latitude, regions):
+        mask = np.zeros(longitude.shape, dtype=bool)
+        for polygon in regions:
+            mask |= self._points_in_polygon(longitude, latitude, polygon)
+        return mask
 
     @staticmethod
     def _lookup_indices(longitude, latitude):
@@ -199,6 +273,15 @@ class Earth:
             longitude, latitude
         )
         return self._city_lookup[latitude_index, longitude_index]
+
+    def _terrain_masks(self, longitude, latitude):
+        longitude_index, latitude_index = self._lookup_indices(
+            longitude, latitude
+        )
+        return (
+            self._desert_lookup[latitude_index, longitude_index],
+            self._mountain_lookup[latitude_index, longitude_index],
+        )
 
     @staticmethod
     def _smoothstep(value):
@@ -218,11 +301,11 @@ class Earth:
         close_offset = 0.62
 
         if phase < 1.0:
-            return 30.0, close_scale, close_offset
+            return self.CLOSEUP_LATITUDE, close_scale, close_offset
 
         if phase < 1.0 + transition_rotations:
             progress = self._smoothstep((phase - 1.0) / transition_rotations)
-            latitude = 30.0 * (1.0 - progress)
+            latitude = self.CLOSEUP_LATITUDE * (1.0 - progress)
             scale = close_scale + (1.0 - close_scale) * progress
             offset = close_offset * (1.0 - progress)
             return latitude, scale, offset
@@ -236,14 +319,14 @@ class Earth:
                 (phase - south_zoom_start) / transition_rotations
             )
             return (
-                -30.0 * progress,
+                -self.CLOSEUP_LATITUDE * progress,
                 1.0 + (close_scale - 1.0) * progress,
                 -close_offset * progress,
             )
 
         south_hold_end = south_zoom_start + transition_rotations + 1.0
         if phase < south_hold_end:
-            return -30.0, close_scale, -close_offset
+            return -self.CLOSEUP_LATITUDE, close_scale, -close_offset
 
         south_zoom_out_end = south_hold_end + transition_rotations
         if phase < south_zoom_out_end:
@@ -251,7 +334,7 @@ class Earth:
                 (phase - south_hold_end) / transition_rotations
             )
             return (
-                -30.0 * (1.0 - progress),
+                -self.CLOSEUP_LATITUDE * (1.0 - progress),
                 close_scale + (1.0 - close_scale) * progress,
                 -close_offset * (1.0 - progress),
             )
@@ -264,7 +347,7 @@ class Earth:
             (phase - north_zoom_start) / transition_rotations
         )
         return (
-            30.0 * progress,
+            self.CLOSEUP_LATITUDE * progress,
             1.0 + (close_scale - 1.0) * progress,
             close_offset * progress,
         )
@@ -366,13 +449,20 @@ class Earth:
         ocean_color = np.array([10.0, 90.0, 210.0])
         land_color = np.array([85.0, 185.0, 75.0])
         desert_color = np.array([220.0, 175.0, 80.0])
+        mountain_color = np.array([120.0, 105.0, 78.0])
         sample_color = np.broadcast_to(ocean_color, (*on_globe.shape, 3)).copy()
         sample_color[land] = land_color
 
-        dry_land = land & (np.abs(latitude) < 31.0) & (
-            np.sin(np.radians(longitude * 2.2 + latitude * 3.1)) > 0.2
-        )
-        sample_color[dry_land] = desert_color
+        desert, mountain = self._terrain_masks(longitude, latitude)
+        desert &= land & on_globe
+        mountain &= land & on_globe
+        sample_color[desert] = desert_color
+        sample_color[mountain] = mountain_color
+
+        # A restrained snow highlight distinguishes the highest northern
+        # ranges without turning every mountain into a polar ice cap.
+        snowy_mountain = mountain & (latitude > 34.0)
+        sample_color[snowy_mountain] = [190.0, 195.0, 185.0]
 
         polar = on_globe & (np.abs(latitude) > 72.0)
         sample_color[polar] = [230.0, 245.0, 255.0]
@@ -424,8 +514,12 @@ class Earth:
         sample_color[:, :, 2] += atmosphere * 1.5 * on_globe
 
         city_lights = self._city_lights(longitude, latitude)
-        illuminated_cities = city_lights & land & night_side
-        sample_color[illuminated_cities] = [255.0, 174.0, 45.0]
+        illuminated_cities = (city_lights > 0.0) & land & night_side
+        city_strength = city_lights[illuminated_cities, np.newaxis]
+        sample_color[illuminated_cities] = (
+            sample_color[illuminated_cities] * (1.0 - city_strength)
+            + np.array([255.0, 174.0, 45.0]) * city_strength
+        )
 
         # Average only covered samples. Partial coverage naturally antialiases
         # the circular limb against the star field.
