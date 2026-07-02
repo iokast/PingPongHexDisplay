@@ -20,6 +20,9 @@ class Expanse:
         self.original_palette = color_palette
         self.color_palette = (np.asarray(color_palette) * self.alpha).astype(int)
 
+    def set_brightness(self, brightness):
+        self.set_palette(self.original_palette, brightness)
+
     def update(self, state):
         num_bins = len(self.color_bins)
         led_adj_dict = {idx: set(adj) for idx, adj in enumerate(led_adjacency) if adj}  # Convert list of lists to dict of sets
@@ -71,6 +74,3 @@ class Expanse:
             self.color_bins[(i + 1) % num_bins].update(move_to_next_bin)
 
         return state.astype(int)
-        
-
-        

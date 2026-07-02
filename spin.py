@@ -27,6 +27,7 @@ class Spin:
         
     def set_palette(self, color_palette, alpha):
         self.alpha = alpha
+        self.original_palette = color_palette
         
         if len(color_palette) >= 11:
             layer_colors_base = deepcopy(color_palette[:11])
@@ -47,6 +48,9 @@ class Spin:
                 c = (self.bg_color + (self.layer_colors_base[i+1, :] * j - self.bg_color) / tail_len).astype(int)
                 self.layer_colors_all[i+1].append(c)
 
+    def set_brightness(self, brightness):
+        self.set_palette(self.original_palette, brightness)
+
 
     def update(self, state):
         for i in range(1, len(self.layers)): # for each ring
@@ -61,4 +65,4 @@ class Spin:
             
             self.layers[i].append(self.layers[i].pop(0))     
 
-        return state   
+        return state

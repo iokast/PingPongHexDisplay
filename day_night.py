@@ -54,6 +54,9 @@ class DayNight:
         # the same brightness controls as the other background animations.
         self.brightness = alpha
 
+    def set_brightness(self, brightness):
+        self.brightness = brightness
+
     @staticmethod
     def _smoothstep(value):
         value = max(0.0, min(1.0, value))

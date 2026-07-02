@@ -36,7 +36,7 @@ class Shader:
             os.environ.get("PPL_SUPERSAMPLE", "1") != "0"
         )
         self.sample_radius = float(os.environ.get("PPL_SAMPLE_RADIUS", "0.45"))
-        self.shader_zoom = float(os.environ.get("PPL_SHADER_ZOOM", "1.2"))
+        self.shader_zoom = float(os.environ.get("PPL_SHADER_ZOOM", "1.1"))
         self.sample_offsets = self.build_sample_offsets()
         self.heavy_shaders = {
             "cineshader_laval.fs",
@@ -136,8 +136,9 @@ class Shader:
         self.pixel_map[:, 1] = np.clip(self.pixel_map[:, 1], 0, self.canvas_size - 1)
 
     def change_shader(self):
+        old_shader_id = self.shader_id
+        old_shadertoy_code = self.shadertoy_code
         self.shader_id = (self.shader_id + 1) % len(self.shader_files)
-        print("Loading shader:", self.shader_files[self.shader_id])
 
         with open(self.shader_files[self.shader_id], "r") as f:
             self.shadertoy_code = f.read()
@@ -145,7 +146,13 @@ class Shader:
         old_program = self.shader_program
         old_vao = self.vao
         old_vertex_buffer = self.vertex_buffer
-        self.shader_program = self.compile_shaders()
+        try:
+            new_program = self.compile_shaders()
+        except Exception:
+            self.shader_id = old_shader_id
+            self.shadertoy_code = old_shadertoy_code
+            raise
+        self.shader_program = new_program
         self.vao = self.create_buffer(self.shader_program)
         self.cache_uniform_locations()
         self.previous_led_frame = None
@@ -154,10 +161,15 @@ class Shader:
         glDeleteBuffers(1, [old_vertex_buffer])
         glDeleteProgram(old_program)
 
+    @property
+    def current_shader_name(self):
+        return os.path.basename(self.shader_files[self.shader_id])
+
     def set_palette(self, colors, brightness):
-        if colors != self.colors:
-            self.colors = colors
-            self.change_shader()
+        self.colors = colors
+        self.brightness = brightness
+
+    def set_brightness(self, brightness):
         self.brightness = brightness
 
     def prepare_shadertoy_shader(self, code):

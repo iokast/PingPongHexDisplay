@@ -16,7 +16,7 @@ import signal
 import time
 from threading import Event, Thread
 from shader import Shader
-from queue import Queue
+from queue import Empty, Queue
 from solar_dimmer import SolarDimmer
 from day_night import DayNight
 
@@ -60,7 +60,7 @@ class Display():
 
     def set_color_and_brightness(self):
         for animation in self.background_animations:
-            animation.set_palette(self.colors, self.brightness_background)
+            animation.set_brightness(self.brightness_background)
 
         self.clock_animations[self.clock_animation_id].set_brightness(self.brightness_clock)
 
@@ -69,6 +69,37 @@ class Display():
 
     def change_background_type(self):
         self.background_animation_id = (self.background_animation_id + 1) % len(self.background_animations)
+
+    @property
+    def active_animation(self):
+        return self.background_animations[self.background_animation_id]
+
+    @property
+    def active_animation_name(self):
+        return type(self.active_animation).__name__
+
+    def change_current_color_or_shader(self):
+        animation = self.active_animation
+        if isinstance(animation, Shader):
+            animation.change_shader()
+            return {
+                "action": "shader updated",
+                "shader": animation.current_shader_name,
+            }
+        if isinstance(animation, DayNight):
+            return {
+                "action": "no palette change",
+                "animation": self.active_animation_name,
+            }
+
+        self.colors_id = (self.colors_id + 1) % len(color_palette_11)
+        self.colors = color_palette_11[self.colors_id]
+        animation.set_palette(self.colors, self.brightness_background)
+        return {
+            "action": "palette updated",
+            "animation": self.active_animation_name,
+            "palette": self.colors_id,
+        }
 
     def change_clock_color_type(self):
         self.clock_animations[self.clock_animation_id].change_color_type()
@@ -155,12 +186,15 @@ def dimmer_status():
 
 @app.route('/change_colors', methods=['POST'])
 def change_colors():
-    global command_queue, display
-    if display is not None:
-        display.colors_id = (display.colors_id + 1) % len(color_palette_11)
-        display.colors = color_palette_11[display.colors_id]
-        command_queue.put("change_colors")
-    return jsonify({"status": "colors updated"})
+    result_queue = Queue(maxsize=1)
+    command_queue.put(("change_colors", result_queue))
+    try:
+        result = result_queue.get(timeout=15)
+    except Empty:
+        return jsonify({"status": "error", "message": "change timed out"}), 504
+    if "error" in result:
+        return jsonify({"status": "error", "message": result["error"]}), result.get("code", 500)
+    return jsonify({"status": "updated", **result})
 
 @app.route('/change_clock_type', methods=['POST'])
 def change_clock_type():
@@ -174,6 +208,22 @@ def change_background_type():
     if display is not None:
         display.change_background_type()
     return jsonify({"status": "background type updated"})
+
+@app.route('/change_shader', methods=['POST'])
+def change_shader():
+    result_queue = Queue(maxsize=1)
+    command_queue.put(("change_shader", result_queue))
+    try:
+        result = result_queue.get(timeout=15)
+    except Empty:
+        return jsonify({"status": "error", "message": "shader change timed out"}), 504
+
+    if "error" in result:
+        return jsonify({"status": "error", "message": result["error"]}), result.get("code", 500)
+    return jsonify({
+        "status": "shader updated",
+        "shader": result["shader"],
+    })
 
 @app.route('/change_clock_color_type', methods=['POST'])
 def change_clock_color_type():
@@ -192,14 +242,33 @@ def process_commands():
     global command_queue, display
     while not command_queue.empty():
         command = command_queue.get()
+        result_queue = None
+        if isinstance(command, tuple):
+            command, result_queue = command
+
         if command == "change_colors":
-            display.colors_id = (display.colors_id + 1) % len(color_palette_11)
-            display.colors = color_palette_11[display.colors_id]
-            display.set_color_and_brightness()
+            try:
+                result_queue.put(display.change_current_color_or_shader())
+            except Exception as exc:
+                result_queue.put({"error": str(exc)})
         elif command == "change_background_type":
             display.change_background_type()
         elif command == "change_clock_type":
             display.change_clock_type()
+        elif command == "change_shader":
+            if not isinstance(display.active_animation, Shader):
+                result_queue.put({
+                    "error": "shader animation is not active",
+                    "code": 409,
+                })
+            else:
+                try:
+                    display.shader_animation.change_shader()
+                    result_queue.put({
+                        "shader": display.shader_animation.current_shader_name,
+                    })
+                except Exception as exc:
+                    result_queue.put({"error": str(exc)})
         elif command == "toggle_sleep":
             display.toggle_sleep()
 
@@ -227,12 +296,18 @@ def animation_loop():
             frame_count += 1
             if frame_count == num_loops_to_update_fps:
                 report_elapsed = time.perf_counter() - report_start
+                animation_details = f"animation {display.active_animation_name}"
+                if isinstance(display.active_animation, Shader):
+                    animation_details += (
+                        f" | shader {display.shader_animation.current_shader_name}"
+                    )
                 print(
                     f"FPS {frame_count / report_elapsed:5.1f} | "
                     f"background {display.brightness_background * 100:3.0f}% | "
                     f"clock {display.brightness_clock * 100:3.0f}% | "
                     f"dimmer {display.dimmer_brightness * 100:3.0f}% | "
-                    f"{display.dimmer_status}",
+                    f"{display.dimmer_status} | "
+                    f"{animation_details}",
                     end='\r',
                 )
                 report_start = time.perf_counter()
