@@ -88,7 +88,14 @@ class Display():
                 "action": "shader updated",
                 "shader": animation.current_shader_name,
             }
-        if isinstance(animation, (DayNight, Earth)):
+        if isinstance(animation, Earth):
+            mode = animation.change_lighting_mode()
+            return {
+                "action": "earth lighting updated",
+                "animation": self.active_animation_name,
+                "mode": mode,
+            }
+        if isinstance(animation, DayNight):
             return {
                 "action": "no palette change",
                 "animation": self.active_animation_name,
@@ -152,6 +159,7 @@ shutdown_event = Event()
 def set_params():
     global display
     data = request.json
+    fps_result = None
     if display is not None:
         brightness_changed = False
         if "brightness_background" in data:
@@ -171,13 +179,21 @@ def set_params():
 
         if "fps" in data:
             fps = float(data["fps"])
-            display.frame_interval = 0.0 if fps <= 0 else 1.0 / fps
+            if isinstance(display.active_animation, Earth):
+                rate = display.active_animation.set_rotation_rate(fps)
+                fps_result = {"earth_rotation_rate": rate}
+            else:
+                display.frame_interval = 0.0 if fps <= 0 else 1.0 / fps
+                fps_result = {"target_fps": fps}
 
-    return jsonify({
+    result = {
         "status": "parameters updated",
         "automatic_dimmer": not display.dimmer.override_active(),
         "dimmer_brightness": display.dimmer_brightness,
-    })
+    }
+    if fps_result is not None:
+        result.update(fps_result)
+    return jsonify(result)
 
 @app.route('/dimmer_status', methods=['GET'])
 def dimmer_status():

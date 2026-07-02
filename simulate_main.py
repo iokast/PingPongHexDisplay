@@ -29,6 +29,8 @@ class Simulator:
         "Right/Left: clock brightness",
         "A: toggle automatic solar dimmer preview",
         "G: toggle hardware gamma preview",
+        "[/]: decrease/increase Earth rotation by 0.25",
+        "0: stop Earth rotation",
         "Space: pause / wake",
         "F12: save screenshot",
         "H: toggle this help",
@@ -144,7 +146,11 @@ class Simulator:
         if isinstance(animation, Shader):
             self.change_shader_safely()
             return
-        if isinstance(animation, (DayNight, Earth)):
+        if isinstance(animation, Earth):
+            mode = animation.change_lighting_mode()
+            self.status_message = f"Earth lighting: {mode}"
+            return
+        if isinstance(animation, DayNight):
             return
         self.colors_id = (self.colors_id + 1) % len(color_palette_11)
         self.colors = color_palette_11[self.colors_id]
@@ -166,6 +172,12 @@ class Simulator:
         else:
             self.status_message = f"Loaded {self.shader_animation.current_shader_name}"
         return True
+
+    def set_earth_rotation_rate(self, rate):
+        if not isinstance(self.active_animation, Earth):
+            return
+        rate = self.active_animation.set_rotation_rate(rate)
+        self.status_message = f"Earth rotation rate: {rate:g}x"
 
     def handle_key(self, key):
         if key in (pg.K_ESCAPE, pg.K_q):
@@ -192,6 +204,12 @@ class Simulator:
             self.auto_dimmer = not self.auto_dimmer
         elif key == pg.K_g:
             self.apply_gamma = not self.apply_gamma
+        elif key == pg.K_LEFTBRACKET and isinstance(self.active_animation, Earth):
+            self.set_earth_rotation_rate(self.active_animation.rotation_rate - 0.25)
+        elif key == pg.K_RIGHTBRACKET and isinstance(self.active_animation, Earth):
+            self.set_earth_rotation_rate(self.active_animation.rotation_rate + 0.25)
+        elif key == pg.K_0 and isinstance(self.active_animation, Earth):
+            self.set_earth_rotation_rate(0.0)
         elif key == pg.K_SPACE:
             self.is_on = not self.is_on
         elif key == pg.K_h:
@@ -238,6 +256,8 @@ class Simulator:
         details = self.active_animation_name
         if isinstance(self.active_animation, Shader):
             details += f" / {self.shader_animation.current_shader_name}"
+        elif isinstance(self.active_animation, Earth):
+            details += f" / {self.active_animation.rotation_rate:g}x rotation"
         return (
             f"{self.frame_clock.get_fps():4.1f} FPS | {details} | "
             f"BG {self.brightness_background * 100:.0f}% | "

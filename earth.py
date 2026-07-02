@@ -1,6 +1,7 @@
 import math
 import os
 import time
+from datetime import datetime, timezone
 
 import numpy as np
 
@@ -63,12 +64,30 @@ class Earth:
         ((27, 47), (42, 47), (42, 41), (29, 41)),                 # Black Sea
     )
 
+    LIGHTING_MODES = ("day & night", "day only", "night only")
+
+    # Major population centers, intentionally consolidated and slightly
+    # exaggerated so they remain visible on the low-resolution globe.
+    CITY_CENTERS = (
+        (-74.0, 40.7), (-77.0, 38.9), (-87.6, 41.9), (-118.2, 34.1),
+        (-99.1, 19.4), (-46.6, -23.6), (-58.4, -34.6), (-0.1, 51.5),
+        (2.4, 48.9), (13.4, 52.5), (30.5, 50.5), (37.6, 55.8),
+        (31.2, 30.0), (3.4, 6.5), (28.0, -26.2), (55.3, 25.2),
+        (72.9, 19.1), (77.2, 28.6), (90.4, 23.8), (100.5, 13.8),
+        (103.8, 1.3), (106.8, -6.2), (116.4, 39.9), (121.5, 31.2),
+        (139.7, 35.7), (127.0, 37.6), (151.2, -33.9), (144.9, -37.8),
+    )
+
     def __init__(self, color_palette=None, alpha=1.0):
         self.brightness = alpha
         self.start_time = time.monotonic()
+        self._last_update_time = self.start_time
+        self._animation_elapsed = 0.0
+        self.rotation_rate = 1.0
         self.rotation_seconds = float(os.environ.get(
             "PPL_EARTH_ROTATION_SECONDS", "120"
         ))
+        self.lighting_mode_id = 0
 
         coords = cartesian_coords.astype(float)
         self.y = coords[:, 0]
@@ -92,6 +111,130 @@ class Earth:
 
     def set_brightness(self, brightness):
         self.brightness = brightness
+
+    @property
+    def lighting_mode(self):
+        return self.LIGHTING_MODES[self.lighting_mode_id]
+
+    def change_lighting_mode(self):
+        self.lighting_mode_id = (
+            self.lighting_mode_id + 1
+        ) % len(self.LIGHTING_MODES)
+        return self.lighting_mode
+
+    def set_rotation_rate(self, rate):
+        self.rotation_rate = max(0.0, float(rate))
+        return self.rotation_rate
+
+    @staticmethod
+    def _sun_position(now=None):
+        """Approximate the real-time subsolar longitude and latitude."""
+        if now is None:
+            now = datetime.now(timezone.utc)
+        day = now.timetuple().tm_yday
+        utc_hour = now.hour + now.minute / 60.0 + now.second / 3600.0
+        year_angle = 2.0 * math.pi / 365.0 * (
+            day - 1 + (utc_hour - 12.0) / 24.0
+        )
+        equation_of_time = 229.18 * (
+            0.000075 + 0.001868 * math.cos(year_angle)
+            - 0.032077 * math.sin(year_angle)
+            - 0.014615 * math.cos(2.0 * year_angle)
+            - 0.040849 * math.sin(2.0 * year_angle)
+        )
+        declination = (
+            0.006918 - 0.399912 * math.cos(year_angle)
+            + 0.070257 * math.sin(year_angle)
+            - 0.006758 * math.cos(2.0 * year_angle)
+            + 0.000907 * math.sin(2.0 * year_angle)
+            - 0.002697 * math.cos(3.0 * year_angle)
+            + 0.00148 * math.sin(3.0 * year_angle)
+        )
+        longitude = 180.0 - 15.0 * utc_hour - equation_of_time / 4.0
+        longitude = (longitude + 180.0) % 360.0 - 180.0
+        return longitude, math.degrees(declination)
+
+    def _city_lights(self, longitude, latitude):
+        lights = np.zeros(longitude.shape, dtype=bool)
+        for city_longitude, city_latitude in self.CITY_CENTERS:
+            longitude_delta = (
+                longitude - city_longitude + 180.0
+            ) % 360.0 - 180.0
+            distance_squared = (
+                (longitude_delta * math.cos(math.radians(city_latitude))) ** 2
+                + (latitude - city_latitude) ** 2
+            )
+            lights |= distance_squared < 4.5 ** 2
+        return lights
+
+    @staticmethod
+    def _smoothstep(value):
+        value = np.clip(value, 0.0, 1.0)
+        return value * value * (3.0 - 2.0 * value)
+
+    def _camera(self, elapsed):
+        """Return camera latitude, globe scale, and vertical framing offset."""
+        transition_rotations = 0.40
+        wide_rotations = 1.0
+        cycle_rotations = 2.0 + 2.0 * wide_rotations + 4.0 * transition_rotations
+        phase = (elapsed / self.rotation_seconds) % cycle_rotations
+        close_scale = 1.62
+        # At this zoom, an offset of roughly half the original globe radius
+        # keeps the near polar limb inside the hexagonal display while pushing
+        # most of the opposite hemisphere beyond the far edge.
+        close_offset = 0.62
+
+        if phase < 1.0:
+            return 30.0, close_scale, close_offset
+
+        if phase < 1.0 + transition_rotations:
+            progress = self._smoothstep((phase - 1.0) / transition_rotations)
+            latitude = 30.0 * (1.0 - progress)
+            scale = close_scale + (1.0 - close_scale) * progress
+            offset = close_offset * (1.0 - progress)
+            return latitude, scale, offset
+
+        south_zoom_start = 1.0 + transition_rotations + wide_rotations
+        if phase < south_zoom_start:
+            return 0.0, 1.0, 0.0
+
+        if phase < south_zoom_start + transition_rotations:
+            progress = self._smoothstep(
+                (phase - south_zoom_start) / transition_rotations
+            )
+            return (
+                -30.0 * progress,
+                1.0 + (close_scale - 1.0) * progress,
+                -close_offset * progress,
+            )
+
+        south_hold_end = south_zoom_start + transition_rotations + 1.0
+        if phase < south_hold_end:
+            return -30.0, close_scale, -close_offset
+
+        south_zoom_out_end = south_hold_end + transition_rotations
+        if phase < south_zoom_out_end:
+            progress = self._smoothstep(
+                (phase - south_hold_end) / transition_rotations
+            )
+            return (
+                -30.0 * (1.0 - progress),
+                close_scale + (1.0 - close_scale) * progress,
+                -close_offset * (1.0 - progress),
+            )
+
+        north_zoom_start = south_zoom_out_end + wide_rotations
+        if phase < north_zoom_start:
+            return 0.0, 1.0, 0.0
+
+        progress = self._smoothstep(
+            (phase - north_zoom_start) / transition_rotations
+        )
+        return (
+            30.0 * progress,
+            1.0 + (close_scale - 1.0) * progress,
+            close_offset * progress,
+        )
 
     @staticmethod
     def _points_in_polygon(longitude, latitude, polygon):
@@ -143,31 +286,42 @@ class Earth:
         return state
 
     def update(self, state):
-        elapsed = time.monotonic() - self.start_time
+        now = time.monotonic()
+        delta = max(0.0, now - self._last_update_time)
+        self._last_update_time = now
+        self._animation_elapsed += delta * self.rotation_rate
+        elapsed = self._animation_elapsed
         output = self._background(elapsed)
+
+        camera_latitude, camera_scale, camera_offset = self._camera(elapsed)
+        camera_radius = self.radius * camera_scale
+        framed_center_y = self.center_y + self.radius * camera_offset
 
         sample_x = self.x[:, np.newaxis] + self.sample_offsets[np.newaxis, :, 0]
         sample_y = self.y[:, np.newaxis] + self.sample_offsets[np.newaxis, :, 1]
-        screen_x = (sample_x - self.center_x) / self.radius
-        screen_y = (self.center_y - sample_y) / self.radius
+        screen_x = (sample_x - self.center_x) / camera_radius
+        screen_y = (framed_center_y - sample_y) / camera_radius
 
         # Keep the rotational axis vertical so north remains straight up.
-        globe_x = screen_x
-        globe_y = screen_y
-        radius_squared = globe_x * globe_x + globe_y * globe_y
+        view_x = screen_x
+        view_y = screen_y
+        radius_squared = view_x * view_x + view_y * view_y
         on_globe = radius_squared <= 1.0
-        globe_z = np.sqrt(np.clip(1.0 - radius_squared, 0.0, 1.0))
+        view_z = np.sqrt(np.clip(1.0 - radius_squared, 0.0, 1.0))
+
+        # Tilt the globe under the camera. At +30 degrees the center of the
+        # display is 30 N; at -30 degrees it is 30 S.
+        camera_angle = math.radians(camera_latitude)
+        camera_sin = math.sin(camera_angle)
+        camera_cos = math.cos(camera_angle)
+        globe_x = view_x
+        globe_y = view_y * camera_cos + view_z * camera_sin
+        globe_z = view_z * camera_cos - view_y * camera_sin
 
         rotation = 2.0 * math.pi * (elapsed / self.rotation_seconds)
         longitude = np.degrees(np.arctan2(globe_x, globe_z) + rotation)
         longitude = (longitude + 180.0) % 360.0 - 180.0
-        raw_latitude = np.degrees(np.arcsin(np.clip(globe_y, -1.0, 1.0)))
-        # Orthographic projection crowds high latitudes toward the equator on
-        # this tiny globe. Symmetrically expand them while keeping latitude 0
-        # dead center and both poles fixed at +/-90 degrees.
-        latitude = np.sign(raw_latitude) * 90.0 * (
-            np.abs(raw_latitude) / 90.0
-        ) ** 1.15
+        latitude = np.degrees(np.arcsin(np.clip(globe_y, -1.0, 1.0)))
         land = self._land_mask(longitude, latitude) & on_globe
 
         ocean_color = np.array([10.0, 90.0, 210.0])
@@ -184,21 +338,6 @@ class Earth:
         polar = on_globe & (np.abs(latitude) > 72.0)
         sample_color[polar] = [230.0, 245.0, 255.0]
 
-        # Fixed upper-left light gives a readable terminator without hiding
-        # continents completely on the night side.
-        light = np.array([-0.42, 0.30, 0.855])
-        light /= np.linalg.norm(light)
-        diffuse = np.maximum(
-            globe_x * light[0] + globe_y * light[1] + globe_z * light[2],
-            0.0,
-        )
-        lighting = 0.30 + 0.70 * diffuse
-        sample_color *= lighting[:, :, np.newaxis]
-
-        atmosphere = np.clip((1.0 - globe_z) ** 3 * 75.0, 0.0, 55.0)
-        sample_color[:, :, 1] += atmosphere * on_globe
-        sample_color[:, :, 2] += atmosphere * 1.5 * on_globe
-
         # Sparse translucent clouds add motion cues without obscuring the map.
         cloud_pattern = (
             np.sin(np.radians(longitude * 3.0) + elapsed * 0.045)
@@ -206,6 +345,48 @@ class Earth:
         )
         clouds = on_globe & (cloud_pattern > 1.45) & (np.abs(latitude) < 65.0)
         sample_color[clouds] = sample_color[clouds] * 0.70 + 255.0 * 0.30
+
+        sun_longitude, sun_latitude = self._sun_position()
+        latitude_radians = np.radians(latitude)
+        sun_latitude_radians = math.radians(sun_latitude)
+        solar_cosine = (
+            np.sin(latitude_radians) * math.sin(sun_latitude_radians)
+            + np.cos(latitude_radians) * math.cos(sun_latitude_radians)
+            * np.cos(np.radians(longitude - sun_longitude))
+        )
+
+        if self.lighting_mode == "day only":
+            # Studio-style light keeps the entire globe legible.
+            light = np.array([-0.42, 0.30, 0.855])
+            light /= np.linalg.norm(light)
+            diffuse = np.maximum(
+                view_x * light[0] + view_y * light[1] + view_z * light[2],
+                0.0,
+            )
+            lighting = 0.38 + 0.62 * diffuse
+            night_side = np.zeros(on_globe.shape, dtype=bool)
+        elif self.lighting_mode == "night only":
+            lighting = np.full(on_globe.shape, 0.075)
+            night_side = on_globe
+        else:
+            # A small ambient floor preserves the globe silhouette while the
+            # real-time solar cosine supplies the moving terminator.
+            lighting = 0.065 + 0.935 * np.clip(solar_cosine, 0.0, 1.0)
+            night_side = on_globe & (solar_cosine < -0.04)
+
+        sample_color *= lighting[:, :, np.newaxis]
+
+        atmosphere = np.clip((1.0 - view_z) ** 3 * 75.0, 0.0, 55.0)
+        if self.lighting_mode == "night only":
+            atmosphere *= 0.18
+        elif self.lighting_mode == "day & night":
+            atmosphere *= 0.18 + 0.82 * np.clip(solar_cosine, 0.0, 1.0)
+        sample_color[:, :, 1] += atmosphere * on_globe
+        sample_color[:, :, 2] += atmosphere * 1.5 * on_globe
+
+        city_lights = self._city_lights(longitude, latitude)
+        illuminated_cities = city_lights & land & night_side
+        sample_color[illuminated_cities] = [255.0, 174.0, 45.0]
 
         # Average only covered samples. Partial coverage naturally antialiases
         # the circular limb against the star field.
