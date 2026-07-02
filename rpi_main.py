@@ -12,8 +12,9 @@ from expanse import Expanse
 from spin import Spin
 from clock import Clock
 import numpy as np
+import signal
 import time
-from threading import Thread
+from threading import Event, Thread
 from shader import Shader
 from queue import Queue
 from solar_dimmer import SolarDimmer
@@ -95,13 +96,24 @@ class Display():
         self.strip.set_pixel_colors(state_24bit)
         self.strip.refresh_display()
 
-    def turn_off(self):
-        self.strip.turn_off()
-        display.is_on = not display.is_on
+    def toggle_sleep(self):
+        if self.is_on:
+            self.strip.blank()
+            self.is_on = False
+        else:
+            self.is_on = True
+
+    def close(self):
+        self.is_on = False
+        try:
+            self.shader_animation.close()
+        finally:
+            self.strip.close()
 
 # Global variables
 display = Display(colors_id=0)
 command_queue = Queue()
+shutdown_event = Event()
 
 @app.route('/set_params', methods=['POST'])
 def set_params():
@@ -173,7 +185,7 @@ def change_clock_color_type():
 @app.route('/turn_on_off', methods=['POST'])
 def turn_on_off():
     global command_queue
-    command_queue.put("turn_off") 
+    command_queue.put("toggle_sleep")
     return jsonify({"status": "LEDs turned on/off"})
 
 def process_commands():
@@ -188,18 +200,21 @@ def process_commands():
             display.change_background_type()
         elif command == "change_clock_type":
             display.change_clock_type()
-        elif command == "turn_off":
-            display.turn_off()
+        elif command == "toggle_sleep":
+            display.toggle_sleep()
+
+def request_shutdown(signum=None, frame=None):
+    shutdown_event.set()
 
 def animation_loop():
     global display
-    display.shader_animation.initialize_opengl()
     frame_count = 0
     num_loops_to_update_fps = 60
     report_start = time.perf_counter()
 
     try:
-        while True:
+        display.shader_animation.initialize_opengl()
+        while not shutdown_event.is_set():
             frame_start = time.perf_counter()
             process_commands()
             if display.is_on: display.update()
@@ -223,9 +238,15 @@ def animation_loop():
                 report_start = time.perf_counter()
                 frame_count = 0
     except KeyboardInterrupt:
-        display.turn_off()
+        request_shutdown()
+    finally:
+        print()
+        display.close()
 
 if __name__ == '__main__':
+    signal.signal(signal.SIGINT, request_shutdown)
+    signal.signal(signal.SIGTERM, request_shutdown)
+
     # Start Flask in a separate thread
     flask_thread = Thread(target=lambda: app.run(host='0.0.0.0', port=5000), daemon=True)
     flask_thread.start()

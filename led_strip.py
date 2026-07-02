@@ -39,6 +39,7 @@ class LedStrip:
         self.channel = ws.ws2811_channel_get(leds, LED_CHANNEL)
         self.brightness = LED_BRIGHTNESS
         self.led_count = LED_COUNT
+        self.closed = False
 
     def set_pixel_color(self, pixel_id, color32):
         ws.ws2811_led_set(self.channel, pixel_id, color32)
@@ -63,10 +64,27 @@ class LedStrip:
             message = ws.ws2811_get_return_t_str(resp)
             raise RuntimeError('ws2811_init failed with code {0} ({1})'.format(resp, message))
 
-    def turn_off(self):
+    def blank(self):
+        if self.closed:
+            return
         for i in range(self.led_count):
             ws.ws2811_led_set(self.channel, i, 0)
         resp = ws.ws2811_render(self.leds)
         if resp != ws.WS2811_SUCCESS:
             message = ws.ws2811_get_return_t_str(resp)
             raise RuntimeError('ws2811_render failed with code {0} ({1})'.format(resp, message))
+
+    def turn_off(self):
+        """Compatibility alias: blank the LEDs without releasing the driver."""
+        self.blank()
+
+    def close(self):
+        """Blank the LEDs and permanently release native WS2812 resources."""
+        if self.closed:
+            return
+        try:
+            self.blank()
+        finally:
+            ws.ws2811_fini(self.leds)
+            ws.delete_ws2811_t(self.leds)
+            self.closed = True
