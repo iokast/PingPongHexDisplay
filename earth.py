@@ -134,6 +134,34 @@ class Earth:
         (141.4, 43.1), (153.0, -27.5), (115.9, -31.9), (174.8, -36.9),
     )
 
+    # Populated belts supply the distributed light visible in satellite
+    # imagery. Strengths remain below metro centers, and a deterministic
+    # texture prevents these broad regions from looking like solid paint.
+    POPULATION_REGIONS = (
+        (0.48, ((-96, 29), (-82, 25), (-67, 43), (-72, 48),
+                (-90, 47), (-98, 38))),                           # Eastern US
+        (0.30, ((-124, 32), (-117, 32), (-118, 49), (-124, 49))), # US west coast
+        (0.24, ((-106, 20), (-96, 18), (-86, 21), (-98, 31))),    # Mexico
+        (0.22, ((-80, -5), (-70, 8), (-60, 7), (-72, -15))),      # Northern Andes
+        (0.32, ((-52, -31), (-39, -23), (-42, -10), (-51, -15),
+                (-57, -25))),                                     # SE Brazil
+        (0.52, ((-10, 36), (4, 43), (25, 44), (31, 54),
+                (20, 61), (3, 59), (-6, 51))),                    # Europe
+        (0.25, ((24, 30), (31, 31), (33, 23), (31, 15),
+                (29, 22))),                                       # Nile valley
+        (0.18, ((-9, 5), (12, 3), (15, 12), (3, 14))),            # West Africa
+        (0.22, ((27, -34), (33, -24), (31, -18), (24, -25))),     # Southern Africa
+        (0.55, ((67, 7), (78, 6), (91, 22), (87, 30),
+                (75, 31), (68, 23))),                              # Indian subcontinent
+        (0.28, ((91, 20), (107, 8), (108, 23), (99, 28))),        # Mainland SE Asia
+        (0.58, ((106, 20), (119, 22), (123, 31), (120, 41),
+                (111, 35))),                                       # Eastern China
+        (0.42, ((126, 34), (130, 34), (130, 40), (125, 40))),     # Korea
+        (0.44, ((130, 31), (142, 34), (146, 45), (138, 45))),     # Japan
+        (0.38, ((95, -8), (114, -9), (116, -5), (105, 1))),       # Java/Sumatra
+        (0.24, ((145, -39), (154, -27), (151, -21), (143, -32))), # Eastern Australia
+    )
+
     def __init__(self, color_palette=None, alpha=1.0):
         self.brightness = alpha
         self.start_time = time.monotonic()
@@ -225,7 +253,7 @@ class Earth:
         lights = np.zeros(longitude.shape, dtype=float)
         city_groups = (
             (self.CITY_CENTERS, 4.5, 1.0),
-            (self.SECONDARY_CITY_CENTERS, 3.0, 0.42),
+            (self.SECONDARY_CITY_CENTERS, 3.2, 0.62),
         )
         for cities, radius, strength in city_groups:
             for city_longitude, city_latitude in cities:
@@ -240,13 +268,33 @@ class Earth:
                 np.maximum(lights, glow, out=lights)
         return lights
 
+    def _population_lights_geometric(self, longitude, latitude):
+        density = np.zeros(longitude.shape, dtype=float)
+        for strength, polygon in self.POPULATION_REGIONS:
+            region = self._points_in_polygon(longitude, latitude, polygon)
+            density[region] = np.maximum(density[region], strength)
+
+        # Stable geographic variation suggests towns, roads, and dark rural
+        # gaps without causing temporal sparkle as the globe rotates.
+        texture = (
+            0.52
+            + 0.28 * (0.5 + 0.5 * np.sin(np.radians(longitude * 17.0 + latitude * 9.0)))
+            + 0.20 * (0.5 + 0.5 * np.sin(np.radians(longitude * 31.0 - latitude * 13.0)))
+        )
+        return density * texture
+
     def _build_geography_lookup(self):
         """Rasterize static geography once instead of testing it every frame."""
         longitude_axis = np.arange(-180.0, 180.0, 1.0)
         latitude_axis = np.arange(-90.0, 91.0, 1.0)
         longitude, latitude = np.meshgrid(longitude_axis, latitude_axis)
         self._land_lookup = self._land_mask_geometric(longitude, latitude)
-        self._city_lookup = self._city_lights_geometric(longitude, latitude)
+        city_lights = self._city_lights_geometric(longitude, latitude)
+        population_lights = self._population_lights_geometric(
+            longitude, latitude
+        )
+        self._city_lookup = np.maximum(city_lights, population_lights)
+        self._city_lookup *= self._land_lookup
         self._desert_lookup = self._region_mask(
             longitude, latitude, self.DESERT_REGIONS
         ) & self._land_lookup
@@ -474,6 +522,7 @@ class Earth:
         )
         clouds = on_globe & (cloud_pattern > 1.45) & (np.abs(latitude) < 65.0)
         sample_color[clouds] = sample_color[clouds] * 0.70 + 255.0 * 0.30
+        unlit_surface_color = sample_color.copy()
 
         sun_longitude, sun_latitude = self._current_sun_position()
         latitude_radians = np.radians(latitude)
@@ -497,28 +546,55 @@ class Earth:
         elif self.lighting_mode == "night only":
             lighting = np.full(on_globe.shape, 0.11)
             night_side = on_globe
+            daylight = np.zeros(on_globe.shape, dtype=float)
         else:
-            # A small ambient floor preserves the globe silhouette while the
-            # real-time solar cosine supplies the moving terminator.
-            lighting = 0.11 + 0.89 * np.clip(solar_cosine, 0.0, 1.0)
+            # Spread twilight across the terminator instead of switching from
+            # ambient to direct sunlight at exactly zero solar elevation.
+            twilight = np.clip((solar_cosine + 0.12) / 0.30, 0.0, 1.0)
+            daylight = twilight * twilight * (3.0 - 2.0 * twilight)
+            lighting = 0.11 + 0.89 * daylight
             night_side = on_globe & (solar_cosine < -0.04)
 
         sample_color *= lighting[:, :, np.newaxis]
+
+        # The hardware gamma LUT maps values below about 25 to zero. Preserve
+        # a gradual land-only floor, rather than switching it on sharply at
+        # the terminator. The ocean remains substantially darker.
+        if self.lighting_mode == "night only":
+            land_floor = np.full(on_globe.shape, 0.30)
+            dark_land = land & on_globe
+        elif self.lighting_mode == "day & night":
+            # Land moves monotonically from a readable 30% night level to
+            # full daylight using the same smooth twilight curve.
+            land_floor = 0.30 + 0.70 * daylight
+            dark_land = land & on_globe
+        else:
+            land_floor = np.zeros(on_globe.shape)
+            dark_land = np.zeros(on_globe.shape, dtype=bool)
+        sample_color[dark_land] = np.maximum(
+            sample_color[dark_land],
+            unlit_surface_color[dark_land]
+            * land_floor[dark_land, np.newaxis],
+        )
 
         atmosphere = np.clip((1.0 - view_z) ** 3 * 75.0, 0.0, 55.0)
         if self.lighting_mode == "night only":
             atmosphere *= 0.18
         elif self.lighting_mode == "day & night":
-            atmosphere *= 0.18 + 0.82 * np.clip(solar_cosine, 0.0, 1.0)
+            atmosphere *= 0.18 + 0.82 * daylight
         sample_color[:, :, 1] += atmosphere * on_globe
         sample_color[:, :, 2] += atmosphere * 1.5 * on_globe
 
         city_lights = self._city_lights(longitude, latitude)
         illuminated_cities = (city_lights > 0.0) & land & night_side
-        city_strength = city_lights[illuminated_cities, np.newaxis]
+        city_strength = np.clip(
+            city_lights[illuminated_cities, np.newaxis] * 1.35,
+            0.0,
+            1.0,
+        )
         sample_color[illuminated_cities] = (
             sample_color[illuminated_cities] * (1.0 - city_strength)
-            + np.array([255.0, 174.0, 45.0]) * city_strength
+            + np.array([255.0, 215.0, 105.0]) * city_strength
         )
 
         # Average only covered samples. Partial coverage naturally antialiases
