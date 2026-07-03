@@ -51,7 +51,7 @@ class Display():
                                       Expanse(color_palette=self.colors, alpha=self.brightness_background),
                                       Spin(color_palette=self.colors, alpha=self.brightness_background),
                                       Earth(color_palette=self.colors, alpha=self.brightness_background)]
-        self.background_animation_id = 0
+        self.background_animation_id = 4
         
         self.clock_animations = [Clock(
             [255, 255, 255],

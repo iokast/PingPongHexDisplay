@@ -139,7 +139,7 @@ class Earth:
         self.start_time = time.monotonic()
         self._last_update_time = self.start_time
         self._animation_elapsed = 0.0
-        self.rotation_rate = 1.0
+        self.rotation_rate = 3.0
         self._sun_cache_minute = None
         self._sun_cache_position = None
         self.rotation_seconds = float(os.environ.get(
@@ -495,12 +495,12 @@ class Earth:
             lighting = 0.38 + 0.62 * diffuse
             night_side = np.zeros(on_globe.shape, dtype=bool)
         elif self.lighting_mode == "night only":
-            lighting = np.full(on_globe.shape, 0.075)
+            lighting = np.full(on_globe.shape, 0.11)
             night_side = on_globe
         else:
             # A small ambient floor preserves the globe silhouette while the
             # real-time solar cosine supplies the moving terminator.
-            lighting = 0.065 + 0.935 * np.clip(solar_cosine, 0.0, 1.0)
+            lighting = 0.11 + 0.89 * np.clip(solar_cosine, 0.0, 1.0)
             night_side = on_globe & (solar_cosine < -0.04)
 
         sample_color *= lighting[:, :, np.newaxis]
@@ -527,13 +527,6 @@ class Earth:
         globe_sum = (sample_color * on_globe[:, :, np.newaxis]).sum(axis=1)
         covered = coverage > 0
         globe_average = globe_sum[covered] / coverage[covered, np.newaxis]
-        land_coverage = land.sum(axis=1)
-        coastline = covered & (land_coverage > 0) & (land_coverage < coverage)
-        coastline_within_covered = coastline[covered]
-        globe_average[coastline_within_covered] = (
-            globe_average[coastline_within_covered] * 0.72
-            + np.array([185.0, 205.0, 112.0]) * 0.28
-        )
         coverage_fraction = coverage[covered, np.newaxis] / len(self.sample_offsets)
         output[covered] = (
             output[covered] * (1.0 - coverage_fraction)

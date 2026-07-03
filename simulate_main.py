@@ -76,7 +76,7 @@ class Simulator:
             Spin(self.colors, self.brightness_background),
             Earth(self.colors, self.brightness_background),
         ]
-        self.background_animation_id = 1
+        self.background_animation_id = 4
         self.clock_animation = Clock(
             [255, 255, 255],
             alpha=self.brightness_clock,
